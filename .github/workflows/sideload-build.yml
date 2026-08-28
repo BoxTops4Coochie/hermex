@@ -21,7 +21,10 @@ permissions:
 jobs:
   build:
     name: Build unsigned device .ipa
-    runs-on: macos-14
+    # Must match the repo's own CI (macos-26 / Xcode 26): the app relies on
+    # Xcode 26 @Observable macro isolation; older Xcode fails with Swift
+    # concurrency errors.
+    runs-on: macos-26
     timeout-minutes: 60
 
     env:
