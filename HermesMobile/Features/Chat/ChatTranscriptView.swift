@@ -205,7 +205,18 @@ struct ChatTranscriptView: View {
         viewportWidth: CGFloat,
         contentWidth: CGFloat
     ) -> some View {
-        VStack(spacing: transcriptMessageSpacing) {
+        // Index once per body pass so rows receive only their own reasoning
+        // slice and the live-block checks are O(1) set lookups. Passing the
+        // full group array to every row made each streaming flush compare
+        // every row against the session's entire thinking text (O(rows x
+        // groups) per ~16ms tick), which is what made long sessions stutter.
+        let reasoningGroupsByAnchor = Dictionary(grouping: reasoningGroups) { $0.anchorMessageID }
+        let displayedAnchorIDs = Set(displayedTranscriptMessages.map(\.anchorID))
+
+        // LazyVStack keeps off-screen rows unbuilt: markdown parsing, code
+        // highlighting, and media tasks then run only for the visible window
+        // instead of the full loaded history.
+        LazyVStack(spacing: transcriptMessageSpacing) {
             olderMessagesButton(proxy: proxy)
 
             if let compressionReferenceCard, compressionReferenceCard.afterRenderID == nil {
@@ -227,7 +238,7 @@ struct ChatTranscriptView: View {
                     transcriptMessage: transcriptMessage,
                     transcriptBlockSpacing: transcriptBlockSpacing,
                     showsThinkingAndToolCards: showsThinkingAndToolCards,
-                    reasoningGroups: reasoningGroups,
+                    reasoningGroups: reasoningGroupsByAnchor[transcriptMessage.anchorID, default: []],
                     toolCallGroups: completedToolCallGroupsForAnchor(transcriptMessage.anchorID),
                     liveReasoningText: isReasoningAnchor ? liveReasoningText : "",
                     reasoningAnchorMessageID: isReasoningAnchor ? reasoningAnchorMessageID : nil,
@@ -267,8 +278,8 @@ struct ChatTranscriptView: View {
                 }
             }
 
-            transcriptLooseBlocks
-            liveResponseBlocks
+            transcriptLooseBlocks(reasoningGroupsByAnchor: reasoningGroupsByAnchor)
+            liveResponseBlocks(displayedAnchorIDs: displayedAnchorIDs)
             inlineClarificationCard
             typingIndicator
             turnChangesCard
@@ -341,22 +352,25 @@ struct ChatTranscriptView: View {
     }
 
     @ViewBuilder
-    private var transcriptLooseBlocks: some View {
-        reasoningBlocks(anchorMessageID: nil)
+    private func transcriptLooseBlocks(reasoningGroupsByAnchor: [String?: [ReasoningGroup]]) -> some View {
+        reasoningBlocks(anchorMessageID: nil, reasoningGroupsByAnchor: reasoningGroupsByAnchor)
         toolCallGroups(anchorMessageID: nil)
     }
 
     @ViewBuilder
-    private var liveResponseBlocks: some View {
+    private func liveResponseBlocks(displayedAnchorIDs: Set<String>) -> some View {
         if activeStreamID != nil {
             if showsThinkingAndToolCards {
+                // Render the live block unless its anchor row is already on
+                // screen. A nil anchor renders (matches prior semantics: an
+                // unanchored live block has no row that could show it).
                 if hasLiveReasoningText,
-                   !hasDisplayedTranscriptMessage(anchorID: reasoningAnchorMessageID) {
+                   reasoningAnchorMessageID.map({ !displayedAnchorIDs.contains($0) }) ?? true {
                     ReasoningBlockView(text: liveReasoningText)
                 }
 
                 if !liveToolCalls.isEmpty,
-                   !hasDisplayedTranscriptMessage(anchorID: toolCallAnchorMessageID) {
+                   toolCallAnchorMessageID.map({ !displayedAnchorIDs.contains($0) }) ?? true {
                     ToolActivityGroupView(
                         group: ToolCallGroup.live(
                             anchorMessageID: toolCallAnchorMessageID,
@@ -428,16 +442,13 @@ struct ChatTranscriptView: View {
         !liveReasoningText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func hasDisplayedTranscriptMessage(anchorID: String?) -> Bool {
-        guard let anchorID else { return false }
-
-        return displayedTranscriptMessages.contains { $0.anchorID == anchorID }
-    }
-
     @ViewBuilder
-    private func reasoningBlocks(anchorMessageID: String?) -> some View {
+    private func reasoningBlocks(
+        anchorMessageID: String?,
+        reasoningGroupsByAnchor: [String?: [ReasoningGroup]]
+    ) -> some View {
         if showsThinkingAndToolCards {
-            ForEach(reasoningGroups.filter { $0.anchorMessageID == anchorMessageID }) { group in
+            ForEach(reasoningGroupsByAnchor[anchorMessageID, default: []]) { group in
                 ReasoningBlockView(text: group.text)
             }
         }
@@ -562,7 +573,8 @@ private struct ChatTranscriptMessageBlock: View, Equatable {
     @ViewBuilder
     private var reasoningBlocks: some View {
         if showsThinkingAndToolCards {
-            ForEach(reasoningGroups.filter { $0.anchorMessageID == transcriptMessage.anchorID }) { group in
+            // Already sliced to this row's anchor by the parent.
+            ForEach(reasoningGroups) { group in
                 ReasoningBlockView(text: group.text)
             }
         }
