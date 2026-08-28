@@ -216,7 +216,7 @@ struct ChatTranscriptView: View {
         // LazyVStack keeps off-screen rows unbuilt: markdown parsing, code
         // highlighting, and media tasks then run only for the visible window
         // instead of the full loaded history.
-        LazyVStack(spacing: transcriptMessageSpacing) {
+        return LazyVStack(spacing: transcriptMessageSpacing) {
             olderMessagesButton(proxy: proxy)
 
             if let compressionReferenceCard, compressionReferenceCard.afterRenderID == nil {
