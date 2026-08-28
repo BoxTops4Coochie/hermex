@@ -1,0 +1,84 @@
+# Personal sideload build: compiles the Hermex fork for a real device and
+# uploads an UNSIGNED .ipa artifact. Sideloadly (or AltStore) re-signs it
+# locally with a free personal-team Apple ID — no certificates in CI.
+#
+# Bundle id / app group are overridden via Config/Local.xcconfig (the file
+# Shared.xcconfig includes last) so nothing in the project file changes.
+
+name: Sideload Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: "Bundle identifier to build with"
+        required: false
+        default: "com.aabduh.hermex"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build unsigned device .ipa
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    env:
+      PROJECT_PATH: HermesMobile.xcodeproj
+      SCHEME: HermesMobile
+      BUNDLE_ID: ${{ inputs.bundle_id || 'com.aabduh.hermex' }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Write personal signing overrides
+        run: |
+          cat > Config/Local.xcconfig <<EOF
+          DEVELOPMENT_TEAM =
+          CODE_SIGNING_ALLOWED = NO
+          CODE_SIGN_IDENTITY =
+          CODE_SIGNING_REQUIRED = NO
+          APP_BUNDLE_IDENTIFIER = ${BUNDLE_ID}
+          APP_GROUP_IDENTIFIER = group.${BUNDLE_ID}
+          EOF
+          cat Config/Local.xcconfig
+
+      - name: Build Release for arm64 device (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project "${PROJECT_PATH}" \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath DerivedData \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package unsigned .ipa
+        run: |
+          set -euo pipefail
+          APP=$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "Packaging ${APP}"
+          test -n "${APP}"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "${APP}" ipa/Payload/
+          # Info.plist bundle id sanity check
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" \
+            "ipa/Payload/$(basename "${APP}")/Info.plist"
+          cd ipa
+          zip -qry ../Hermex-unsigned.ipa Payload
+          cd ..
+          ls -la Hermex-unsigned.ipa
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hermex-unsigned-ipa
+          path: Hermex-unsigned.ipa
+          retention-days: 14
