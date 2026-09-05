@@ -20,6 +20,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
     /// Server-measured wall-clock seconds for the whole turn, set on its final
     /// assistant message (`_turnDuration`). Absent on older transcripts.
     let turnDuration: Double?
+    let turnTtft: Double?
 
     init(
         role: String?,
@@ -35,6 +36,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         attachments: [MessageAttachment]? = nil,
         turnTps: Double? = nil,
         turnDuration: Double? = nil
+        turnTtft: Double? = nil
     ) {
         self.role = role
         self.content = content
@@ -49,6 +51,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         self.attachments = attachments
         self.turnTps = turnTps
         self.turnDuration = turnDuration
+        self.turnTtft = turnTtft
     }
 
     enum CodingKeys: String, CodingKey {
@@ -64,6 +67,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         case attachments
         case turnTps = "_turnTps"
         case turnDuration = "_turnDuration"
+        case turnTtft = "ttft_seconds"
         case underscoredTimestamp = "_ts"
     }
 
@@ -85,6 +89,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         attachments = Self.attachments(decodedAttachments, enrichedByMarkerIn: content)
         turnTps = container.decodeLossyDoubleIfPresent(forKey: .turnTps)
         turnDuration = container.decodeLossyDoubleIfPresent(forKey: .turnDuration)
+        turnTtft = container.decodeLossyDoubleIfPresent(forKey: .turnTtft)
     }
 
     private static func attachments(

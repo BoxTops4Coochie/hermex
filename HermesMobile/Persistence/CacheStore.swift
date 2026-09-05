@@ -361,6 +361,7 @@ private extension ChatMessage {
             attachments: attachments,
             turnTps: cachedMessage.turnTps,
             turnDuration: cachedMessage.turnDuration
+            turnTtft: cachedMessage.turnTtft
         )
     }
 }

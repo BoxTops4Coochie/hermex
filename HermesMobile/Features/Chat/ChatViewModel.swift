@@ -331,6 +331,12 @@ final class ChatViewModel {
         compressionReferenceCard = card
     }
     private(set) var liveToolCalls: [ToolCall] = []
+    // Client-side time-to-first-token for the active streamed turn (send/queued
+    // tap -> first visible assistant token flush, seconds). Stamped onto the
+    // assistant message at completion; a server-provided value (when upstream
+    // adds one) would take precedence at decode time via `ttft_seconds`.
+    private(set) var liveTurnTTFT: Double?
+    private var turnTTFTStart: Date?
     private(set) var liveReasoningText = ""
     private(set) var streamingAssistantMessageID: String? {
         didSet {
@@ -799,6 +805,22 @@ final class ChatViewModel {
 
     private var requestProfileName: String? {
         Self.nonEmpty(selectedProfileName) ?? Self.nonEmpty(currentProfile)
+    }
+
+    // MARK: - Turn TTFT (time-to-first-token, client-side)
+
+    /// Arms the TTFT stopwatch at the start of a send/retry/regenerate turn.
+    private func startTurnTTFTClock() {
+        turnTTFTStart = Date()
+        liveTurnTTFT = nil
+    }
+
+    /// Arms the stopwatch when adopting an already-active stream (app opened
+    /// mid-response): capture from reattach, not from send.
+    private func adoptActiveTurnTTFTClock() {
+        if turnTTFTStart == nil {
+            turnTTFTStart = Date()
+        }
     }
 
     private var requestModelProvider: String? {
@@ -1533,6 +1555,8 @@ final class ChatViewModel {
             toolCallAnchorMessageID = nil
             reasoningAnchorMessageID = nil
             attachmentCoordinator.removeAllLocalPreviews()
+            liveTurnTTFT = nil
+            turnTTFTStart = nil
             streamCoordinator.reconcileSessionLoad(
                 loadedActiveStreamID: loadedActiveStreamID,
                 preparation: streamLoadPreparation,
@@ -1593,6 +1617,8 @@ final class ChatViewModel {
                         reasoningAnchorMessageID = nil
                         streamingAssistantMessageID = nil
                         attachmentCoordinator.removeAllLocalPreviews()
+                        liveTurnTTFT = nil
+                        turnTTFTStart = nil
                         streamCoordinator.reconcileSessionLoad(
                             loadedActiveStreamID: nil,
                             preparation: streamLoadPreparation,
@@ -2048,7 +2074,8 @@ final class ChatViewModel {
                 contentParts: loadedAssistant.contentParts ?? snapshotAssistant.contentParts,
                 reasoning: loadedAssistant.reasoning ?? snapshotAssistant.reasoning,
                 attachments: loadedAssistant.attachments ?? snapshotAssistant.attachments,
-                turnTps: loadedAssistant.turnTps ?? snapshotAssistant.turnTps
+                turnTps: loadedAssistant.turnTps ?? snapshotAssistant.turnTps,
+                turnTtft: loadedAssistant.turnTtft ?? snapshotAssistant.turnTtft
             )
             return ActiveStreamMessageMerge(
                 messages: mergedMessages,
@@ -2500,6 +2527,7 @@ final class ChatViewModel {
         liveToolCalls = []
         reasoningAnchorMessageID = nil
         toolCallAnchorMessageID = nil
+        startTurnTTFTClock()
         streamCoordinator.prepareForNewResponse()
         responseCompletionNeedsTranscriptRefresh = false
         defer { isStartingChat = false }
@@ -2664,6 +2692,7 @@ final class ChatViewModel {
             pinLocalNoticeMessage(noticeMessage)
         }
 
+        adoptActiveTurnTTFTClock()
         streamCoordinator.start(streamID: streamID)
         return true
     }
@@ -3767,6 +3796,7 @@ final class ChatViewModel {
         liveToolCalls = []
         reasoningAnchorMessageID = nil
         toolCallAnchorMessageID = nil
+        startTurnTTFTClock()
         streamCoordinator.prepareForNewResponse()
         responseCompletionNeedsTranscriptRefresh = false
         defer { isStartingChat = false }
@@ -3813,6 +3843,7 @@ final class ChatViewModel {
             attachmentCoordinator.removeAllLocalPreviews()
 
             let explicitModelPick = explicitModelPickForChatStart()
+            startTurnTTFTClock()
             let sentAt = Date()
             let chatResponse = try await client.startChat(
                 sessionID: sessionID,
@@ -3966,7 +3997,8 @@ final class ChatViewModel {
             contentParts: existing.contentParts,
             reasoning: existing.reasoning,
             attachments: existing.attachments,
-            turnTps: existing.turnTps
+            turnTps: existing.turnTps,
+            turnTtft: existing.turnTtft
         )
         scheduleStreamingScrollTrigger()
     }
@@ -4100,6 +4132,7 @@ final class ChatViewModel {
 
             // Now send the edited text through the normal chat flow
             let explicitModelPick = explicitModelPickForChatStart()
+            startTurnTTFTClock()
             let sentAt = Date()
             let chatResponse = try await client.startChat(
                 sessionID: sessionID,
@@ -4206,6 +4239,7 @@ final class ChatViewModel {
             }
 
             let explicitModelPick = explicitModelPickForChatStart()
+            startTurnTTFTClock()
             let sentAt = Date()
             let chatResponse = try await client.startChat(
                 sessionID: sessionID,
@@ -4500,6 +4534,7 @@ final class ChatViewModel {
         contextWindowSnapshot = contextWindowSnapshot ?? snapshot.contextWindowSnapshot
         attachmentCoordinator.mergeLocalAttachmentPreviews(snapshot.localAttachmentPreviews)
         pinnedLocalNotices = snapshot.pinnedLocalNotices
+        adoptActiveTurnTTFTClock()
         scheduleStreamingScrollTrigger()
         return ChatStreamSnapshotRestoreResult(
             didRestoreSnapshot: true,
@@ -4704,7 +4739,8 @@ final class ChatViewModel {
                 contentParts: existing.contentParts,
                 reasoning: existing.reasoning,
                 attachments: existing.attachments,
-                turnTps: existing.turnTps
+                turnTps: existing.turnTps,
+                turnTtft: existing.turnTtft ?? liveTurnTTFT
             )
             scheduleStreamingScrollTrigger()
             return true
@@ -4892,6 +4928,12 @@ final class ChatViewModel {
     @discardableResult
     private func flushReasoningChunks() -> Bool {
         guard !pendingReasoningChunks.isEmpty else { return false }
+
+        // Reasoning counts as first output for TTFT: on tool-heavy turns the
+        // visible text can lag far behind the model actually responding.
+        if let start = turnTTFTStart, liveTurnTTFT == nil {
+            liveTurnTTFT = Date().timeIntervalSince(start)
+        }
 
         // Chunks were deduplicated at append time, so flushing is pure concatenation.
         let appendedText = pendingReasoningChunks.joined()
@@ -5137,6 +5179,10 @@ final class ChatViewModel {
     private func flushAssistantTokens(maxWordUnits: Int? = nil) -> Bool {
         guard !pendingAssistantTokenChunks.isEmpty else { return false }
 
+        // Capture TTFT on the first real content flush of a turn.
+        if let start = turnTTFTStart, liveTurnTTFT == nil {
+            liveTurnTTFT = Date().timeIntervalSince(start)
+        }
         // Chunks were deduplicated at append time, so flushing is pure concatenation.
         // A word-unit limit moves only the head of the buffer into the visible
         // message; the tail stays pending, keeping the replay-dedup invariant that
@@ -5175,7 +5221,8 @@ final class ChatViewModel {
                 contentParts: existing.contentParts,
                 reasoning: existing.reasoning,
                 attachments: existing.attachments,
-                turnTps: existing.turnTps
+                turnTps: existing.turnTps,
+                turnTtft: existing.turnTtft ?? liveTurnTTFT
             )
             return true
         }
@@ -5883,6 +5930,7 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
     func streamCoordinatorApplyDone(_ payload: DoneStreamEvent) -> Bool {
         flushPendingStreamingContent()
         let currentStreamingAssistantID = streamingAssistantMessageID
+        let capturedTurnTTFT = liveTurnTTFT
         let hasCompletedTranscript = payload.session?.messages?.isEmpty == false
         if let completedSession = payload.session {
             applyCompletedStreamSession(completedSession)
@@ -5923,9 +5971,33 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
                 contentParts: message.contentParts,
                 reasoning: message.reasoning,
                 attachments: message.attachments,
-                turnTps: finalTokensPerSecond
+                turnTps: finalTokensPerSecond,
+                turnTtft: message.turnTtft ?? capturedTurnTTFT
+            )
+        } else if capturedTurnTTFT != nil,
+                  let currentStreamingAssistantID,
+                  let index = messages.firstIndex(where: { $0.messageId == currentStreamingAssistantID }) {
+            // No TPS metrics in this done payload — still preserve client-side
+            // TTFT so the stat survives the completion transcript replace.
+            let message = messages[index]
+            messages[index] = ChatMessage(
+                role: message.role,
+                content: message.content,
+                timestamp: message.timestamp,
+                messageId: message.messageId,
+                name: message.name,
+                toolCallId: message.toolCallId,
+                toolUseId: message.toolUseId,
+                toolCalls: message.toolCalls,
+                contentParts: message.contentParts,
+                reasoning: message.reasoning,
+                attachments: message.attachments,
+                turnTps: message.turnTps,
+                turnTtft: message.turnTtft ?? capturedTurnTTFT
             )
         }
+        liveTurnTTFT = nil
+        turnTTFTStart = nil
         return hasCompletedTranscript
     }
 

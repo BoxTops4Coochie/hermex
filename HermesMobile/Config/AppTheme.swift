@@ -281,11 +281,12 @@ enum ChatTranscriptDisplaySettings {
     static func showsAssistantTurnHeader(
         role: String?,
         hasTextContent: Bool,
-        showsResponseSpeed: Bool,
-        hasResponseSpeed: Bool
+        isEnabled: Bool,
+        showsResponseSpeed: Bool = false,
+        hasResponseSpeed: Bool = false,
+        hasTTFT: Bool = false
     ) -> Bool {
-        showsResponseSpeed &&
-            hasResponseSpeed &&
+        (isEnabled || (showsResponseSpeed && (hasResponseSpeed || hasTTFT))) &&
             role == "assistant" &&
             hasTextContent
     }

@@ -448,6 +448,13 @@ private struct ComposerTextView: UIViewRepresentable {
                     guard self.isFocused, textView.isEditable, textView.window != nil else { return }
                     textView.becomeFirstResponder()
                 } else if textView.isFirstResponder {
+                    // Re-read the binding before evicting: a tap (or send-focus
+                    // restore) may have re-requested keyboard focus after this
+                    // resign was scheduled from a stale isFocused snapshot.
+                    // Without this re-check SwiftUI sends false -> resign -> the
+                    // keyboard drops right after rising on rapid transcript
+                    // updates during streaming.
+                    guard !self.isFocused else { return }
                     textView.resignFirstResponder()
                 }
             }
