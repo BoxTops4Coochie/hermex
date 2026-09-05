@@ -201,7 +201,10 @@ final class ChatViewModel {
     private static let messagePageLimit = 50
 
     private(set) var messages: [ChatMessage] = [] {
-        didSet { recomputeDisplayedTranscriptMessages() }
+        didSet {
+            recomputeDisplayedTranscriptMessages()
+            recomputeDisplayedReasoningGroups()
+        }
     }
     /// Memoized transcript mapping, recomputed once whenever `messages` or
     /// `messagesOffset` changes. Views read this single cached value instead of
@@ -260,14 +263,26 @@ final class ChatViewModel {
     private(set) var completedToolCallGroups: [ToolCallGroup] = []
     private var completedToolCallGroupLookup = ToolCallGroupAnchorLookup()
     private(set) var completedReasoningGroups: [ReasoningGroup] = [] {
-        didSet { recomputeDisplayedTranscriptMessages() }
+        didSet {
+            recomputeDisplayedReasoningGroups()
+            recomputeDisplayedTranscriptMessages()
+        }
     }
-    var displayedReasoningGroups: [ReasoningGroup] {
-        Self.reasoningDisplayGroups(
+    /// Cached snapshot of `Self.reasoningDisplayGroups(...)`. Previously a live
+    /// computed property — it re-ran turn classification plus whitespace
+    /// normalization across the whole transcript's thinking text on *every*
+    /// read, and ChatView reads it once per body pass (~60/s while streaming),
+    /// so long thinking-heavy sessions paid an O(transcript) text pass per frame.
+    private(set) var displayedReasoningGroups: [ReasoningGroup] = []
+
+    private func recomputeDisplayedReasoningGroups() {
+        let groups = Self.reasoningDisplayGroups(
             messages: messages,
             messageOffset: messagesOffset,
             archivedGroups: completedReasoningGroups
         )
+        guard groups != displayedReasoningGroups else { return }
+        displayedReasoningGroups = groups
     }
     func completedToolCallGroupsForAnchor(_ anchorMessageID: String?) -> [ToolCallGroup] {
         completedToolCallGroupLookup.groups(anchorMessageID: anchorMessageID)
@@ -347,7 +362,10 @@ final class ChatViewModel {
     private(set) var toolCallAnchorMessageID: String?
     private(set) var reasoningAnchorMessageID: String?
     private(set) var messagesOffset = 0 {
-        didSet { recomputeDisplayedTranscriptMessages() }
+        didSet {
+            recomputeDisplayedTranscriptMessages()
+            recomputeDisplayedReasoningGroups()
+        }
     }
     private(set) var hasOlderMessages = false
     private(set) var contextWindowSnapshot: ContextWindowSnapshot?
