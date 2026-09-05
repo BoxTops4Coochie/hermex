@@ -8,6 +8,8 @@ struct ContextWindowSnapshot: Decodable, Equatable {
     let outputTokens: Int?
     let estimatedCost: Double?
     let tokensPerSecond: Double?
+    let durationSeconds: Double?
+    let ttftMs: Int?
 
     enum CodingKeys: String, CodingKey {
         case contextLength = "context_length"
@@ -17,6 +19,8 @@ struct ContextWindowSnapshot: Decodable, Equatable {
         case outputTokens = "output_tokens"
         case estimatedCost = "estimated_cost"
         case tokensPerSecond = "tps"
+        case durationSeconds = "duration_seconds"
+        case ttftMs = "ttft_ms"
     }
 
     init(
@@ -26,7 +30,9 @@ struct ContextWindowSnapshot: Decodable, Equatable {
         inputTokens: Int?,
         outputTokens: Int?,
         estimatedCost: Double?,
-        tokensPerSecond: Double? = nil
+        tokensPerSecond: Double? = nil,
+        durationSeconds: Double? = nil,
+        ttftMs: Int? = nil
     ) {
         self.contextLength = contextLength
         self.thresholdTokens = thresholdTokens
@@ -35,6 +41,8 @@ struct ContextWindowSnapshot: Decodable, Equatable {
         self.outputTokens = outputTokens
         self.estimatedCost = estimatedCost
         self.tokensPerSecond = tokensPerSecond
+        self.durationSeconds = durationSeconds
+        self.ttftMs = ttftMs
     }
 
     init(from decoder: Decoder) throws {
@@ -46,6 +54,8 @@ struct ContextWindowSnapshot: Decodable, Equatable {
         outputTokens = container.decodeLossyIntIfPresent(forKey: .outputTokens)
         estimatedCost = container.decodeLossyDoubleIfPresent(forKey: .estimatedCost)
         tokensPerSecond = container.decodeLossyDoubleIfPresent(forKey: .tokensPerSecond)
+        durationSeconds = container.decodeLossyDoubleIfPresent(forKey: .durationSeconds)
+        ttftMs = container.decodeLossyIntIfPresent(forKey: .ttftMs)
     }
 
     var tokensUsed: Int? {
@@ -67,7 +77,9 @@ struct ContextWindowSnapshot: Decodable, Equatable {
             inputTokens: inputTokens,
             outputTokens: outputTokens,
             estimatedCost: estimatedCost,
-            tokensPerSecond: tokensPerSecond
+            tokensPerSecond: tokensPerSecond,
+            durationSeconds: durationSeconds,
+            ttftMs: ttftMs
         )
     }
 }

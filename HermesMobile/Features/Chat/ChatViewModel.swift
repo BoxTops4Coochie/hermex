@@ -5949,6 +5949,10 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
         flushPendingStreamingContent()
         let currentStreamingAssistantID = streamingAssistantMessageID
         let capturedTurnTTFT = liveTurnTTFT
+        // Last real per-stream meter reading; still set here — the coordinator
+        // only clears it in finishStream(), which runs after this delegate call.
+        let capturedLiveTPS = streamCoordinator.liveTokensPerSecond
+        let serverTTFTSeconds = (payload.usage?.ttftMs).map { Double($0) / 1_000.0 }
         let hasCompletedTranscript = payload.session?.messages?.isEmpty == false
         if let completedSession = payload.session {
             applyCompletedStreamSession(completedSession)
@@ -5956,64 +5960,65 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
         if let usage = payload.usage {
             contextWindowSnapshot = usage
         }
-        if let finalTokensPerSecond = payload.usage?.tokensPerSecond,
-           finalTokensPerSecond.isFinite,
-           finalTokensPerSecond > 0,
-           let currentStreamingAssistantID {
-            let currentAssistantIndex = messages.firstIndex(where: { $0.messageId == currentStreamingAssistantID })
-                ?? TranscriptTurnClassifier
-                    .currentTurnAssistantAnchorIDs(in: messages, messageOffset: messagesOffset)
-                    .last
-                    .flatMap { currentAssistantAnchorID in
-                        messages.indices.first { index in
-                            TranscriptTurnClassifier.anchorID(
-                                for: messages[index],
-                                at: index,
-                                messageOffset: messagesOffset
-                            ) == currentAssistantAnchorID
-                        }
-                    }
-            guard let index = currentAssistantIndex else {
-                return hasCompletedTranscript
+        let currentAssistantIndex = currentStreamingAssistantID.flatMap { id in
+            messages.firstIndex(where: { $0.messageId == id })
+        } ?? TranscriptTurnClassifier
+            .currentTurnAssistantAnchorIDs(in: messages, messageOffset: messagesOffset)
+            .last
+            .flatMap { currentAssistantAnchorID in
+                messages.indices.first { index in
+                    TranscriptTurnClassifier.anchorID(
+                        for: messages[index],
+                        at: index,
+                        messageOffset: messagesOffset
+                    ) == currentAssistantAnchorID
+                }
             }
-            let message = messages[index]
-            messages[index] = ChatMessage(
-                role: message.role,
-                content: message.content,
-                timestamp: message.timestamp,
-                messageId: message.messageId,
-                name: message.name,
-                toolCallId: message.toolCallId,
-                toolUseId: message.toolUseId,
-                toolCalls: message.toolCalls,
-                contentParts: message.contentParts,
-                reasoning: message.reasoning,
-                attachments: message.attachments,
-                turnTps: finalTokensPerSecond,
-                turnTtft: message.turnTtft ?? capturedTurnTTFT
-            )
-        } else if capturedTurnTTFT != nil,
-                  let currentStreamingAssistantID,
-                  let index = messages.firstIndex(where: { $0.messageId == currentStreamingAssistantID }) {
-            // No TPS metrics in this done payload — still preserve client-side
-            // TTFT so the stat survives the completion transcript replace.
-            let message = messages[index]
-            messages[index] = ChatMessage(
-                role: message.role,
-                content: message.content,
-                timestamp: message.timestamp,
-                messageId: message.messageId,
-                name: message.name,
-                toolCallId: message.toolCallId,
-                toolUseId: message.toolUseId,
-                toolCalls: message.toolCalls,
-                contentParts: message.contentParts,
-                reasoning: message.reasoning,
-                attachments: message.attachments,
-                turnTps: message.turnTps,
-                turnTtft: message.turnTtft ?? capturedTurnTTFT
-            )
+        guard let index = currentAssistantIndex else {
+            return hasCompletedTranscript
         }
+        let message = messages[index]
+
+        // Server `usage.tps` (also persisted as `_turnTps`) can be a corrupt
+        // artifact on unpatched servers: cumulative session completion tokens
+        // divided by the CURRENT turn duration inflates with session age
+        // (observed 3813 t/s on a ~100 t/s model = ~180x). The live metering
+        // event is a per-stream rate (token-chunk units on chunked providers,
+        // so a corrected server value can legitimately sit several times
+        // higher). Gate on a wide multiple: reject only gross session-length
+        // inflation, not provider chunking differences.
+        let serverTPS = payload.usage?.tokensPerSecond
+        let acceptedTPS: Double?
+        if let serverTPS, serverTPS.isFinite, serverTPS > 0 {
+            if let live = capturedLiveTPS, live.isFinite, live > 0, serverTPS > live * 8 {
+                acceptedTPS = live
+            } else {
+                acceptedTPS = serverTPS
+            }
+        } else {
+            acceptedTPS = message.turnTps
+        }
+
+        // TTFT: prefer the server meter's `ttft_ms` (accurate stream-side
+        // measure), then an earlier-stamped value, then the client-measured
+        // send-tap->first-flush captured above.
+        let resolvedTTFT = serverTTFTSeconds ?? (message.turnTtft ?? capturedTurnTTFT)
+
+        messages[index] = ChatMessage(
+            role: message.role,
+            content: message.content,
+            timestamp: message.timestamp,
+            messageId: message.messageId,
+            name: message.name,
+            toolCallId: message.toolCallId,
+            toolUseId: message.toolUseId,
+            toolCalls: message.toolCalls,
+            contentParts: message.contentParts,
+            reasoning: message.reasoning,
+            attachments: message.attachments,
+            turnTps: acceptedTPS,
+            turnTtft: resolvedTTFT
+        )
         liveTurnTTFT = nil
         turnTTFTStart = nil
         return hasCompletedTranscript

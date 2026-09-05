@@ -68,6 +68,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         case turnTps = "_turnTps"
         case turnDuration = "_turnDuration"
         case turnTtft = "ttft_seconds"
+        case firstTokenMs = "_firstTokenMs"
         case underscoredTimestamp = "_ts"
     }
 
@@ -90,6 +91,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         turnTps = container.decodeLossyDoubleIfPresent(forKey: .turnTps)
         turnDuration = container.decodeLossyDoubleIfPresent(forKey: .turnDuration)
         turnTtft = container.decodeLossyDoubleIfPresent(forKey: .turnTtft)
+            ?? container.decodeLossyIntIfPresent(forKey: .firstTokenMs).map { Double($0) / 1_000.0 }
     }
 
     private static func attachments(

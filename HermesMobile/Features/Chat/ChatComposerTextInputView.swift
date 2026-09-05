@@ -270,6 +270,8 @@ private struct ComposerTextView: UIViewRepresentable {
         /// Publishes made to the bindings, matched against the generation the
         /// bound value carries to spot one the parent has not caught up with.
         private var publishGeneration = 0
+        // True-cancel channel for deferred focus work (#c8a1f75).
+        private var pendingFocusTask: Task<Void, Never>?
 
         init(
             text: Binding<String>,
@@ -428,22 +430,35 @@ private struct ComposerTextView: UIViewRepresentable {
 
             let target = shouldFocus && !isDisabled
             guard textView.isFirstResponder != target else {
+                // The live state already matches the request: a scheduled
+                // focus/resign Task from an older snapshot is now obsolete,
+                // so cancel it and disarm the pending marker together.
+                pendingFocusTask?.cancel()
+                pendingFocusTask = nil
                 pendingFocusTarget = nil
                 return
             }
             guard pendingFocusTarget != target else { return }
 
             pendingFocusTarget = target
-            Task { @MainActor [weak self, weak textView] in
+            // True cancellation, not just a point-in-time re-check (raid-4
+            // finding): a previously scheduled focus/resign Task must never
+            // run after a newer decision replaces it — checking `isFocused`
+            // at execution time leaves an interleave where a stale resign
+            // evicts a fresh becomeFirstResponder between the re-check and
+            // the call. Cancelling the old Task closes that window.
+            pendingFocusTask?.cancel()
+            let task = Task { @MainActor [weak self, weak textView] in
                 await Task.yield()
+                try? Task.checkCancellation()
                 guard let self, let textView else { return }
 
                 if target, textView.window == nil {
                     try? await Task.sleep(nanoseconds: 60_000_000)
                 }
+                try? Task.checkCancellation()
 
                 self.pendingFocusTarget = nil
-
                 if target {
                     guard self.isFocused, textView.isEditable, textView.window != nil else { return }
                     textView.becomeFirstResponder()
@@ -458,6 +473,7 @@ private struct ComposerTextView: UIViewRepresentable {
                     textView.resignFirstResponder()
                 }
             }
+            pendingFocusTask = task
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {

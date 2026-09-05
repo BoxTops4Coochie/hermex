@@ -174,7 +174,28 @@ enum CacheStore {
             }
         }
 
-        let staleMessages = cachedMessages.filter { !freshKeys.contains($0.cacheKey) }
+        let descriptor = FetchDescriptor<CachedMessage>(
+            predicate: #Predicate { cachedMessage in
+                cachedMessage.serverURLString == serverURLString
+                    && cachedMessage.sessionID == sessionID
+            }
+        )
+        // Pagination-aware staleness (bug audit #4, raid-4-confirmed): this
+        // write carries the currently loaded WINDOW, not the whole session.
+        // Rows whose keys are missing may be older pages the user loaded
+        // explicitly ("Load earlier"); deleting them on every completion-time
+        // re-cache progressively shrinks offline history to the newest
+        // window. So a stale row is deleted only when its row sortIndex falls
+        // INSIDE the just-written span [0, messages.count) — content the
+        // window itself replaced/renumbered. Rows at sortIndex >= count are
+        // deliberately-loaded history: preserved, still bounded by the
+        // global CachePolicy.maxMessages eviction (LRU by cachedAt) and the
+        // TTL maintenance pass below.
+        let windowSpan = messages.count
+        let staleMessages = try context.fetch(descriptor).filter { cachedMessage in
+            guard !freshKeys.contains(cachedMessage.cacheKey) else { return false }
+            return cachedMessage.sortIndex < windowSpan
+        }
         for staleMessage in staleMessages {
             context.delete(staleMessage)
         }
