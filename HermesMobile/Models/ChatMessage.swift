@@ -17,6 +17,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
     let reasoning: String?
     let attachments: [MessageAttachment]?
     let turnTps: Double?
+    let turnTtft: Double?
 
     init(
         role: String?,
@@ -30,7 +31,8 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         contentParts: [JSONValue]? = nil,
         reasoning: String? = nil,
         attachments: [MessageAttachment]? = nil,
-        turnTps: Double? = nil
+        turnTps: Double? = nil,
+        turnTtft: Double? = nil
     ) {
         self.role = role
         self.content = content
@@ -44,6 +46,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         self.reasoning = reasoning
         self.attachments = attachments
         self.turnTps = turnTps
+        self.turnTtft = turnTtft
     }
 
     enum CodingKeys: String, CodingKey {
@@ -58,6 +61,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         case reasoning
         case attachments
         case turnTps = "_turnTps"
+        case turnTtft = "ttft_seconds"
         case underscoredTimestamp = "_ts"
     }
 
@@ -78,6 +82,7 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
         let decodedAttachments = Self.decodeAttachmentsTolerantly(from: container)
         attachments = Self.attachments(decodedAttachments, enrichedByMarkerIn: content)
         turnTps = container.decodeLossyDoubleIfPresent(forKey: .turnTps)
+        turnTtft = container.decodeLossyDoubleIfPresent(forKey: .turnTtft)
     }
 
     private static func attachments(

@@ -19,6 +19,7 @@ final class CachedMessage {
     var reasoning: String?
     var attachmentsData: Data?
     var turnTps: Double?
+    var turnTtft: Double?
     var cachedAt: Date
     var expiresAt: Date
 
@@ -74,6 +75,7 @@ final class CachedMessage {
         }
         reasoning = message.reasoning
         turnTps = message.turnTps
+        turnTtft = message.turnTtft
         if let attachments = message.attachments, !attachments.isEmpty {
             attachmentsData = try? JSONEncoder().encode(attachments)
         } else {

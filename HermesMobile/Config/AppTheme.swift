@@ -293,9 +293,10 @@ enum ChatTranscriptDisplaySettings {
         hasTextContent: Bool,
         isEnabled: Bool,
         showsResponseSpeed: Bool = false,
-        hasResponseSpeed: Bool = false
+        hasResponseSpeed: Bool = false,
+        hasTTFT: Bool = false
     ) -> Bool {
-        (isEnabled || (showsResponseSpeed && hasResponseSpeed)) &&
+        (isEnabled || (showsResponseSpeed && (hasResponseSpeed || hasTTFT))) &&
             role == "assistant" &&
             hasTextContent
     }
