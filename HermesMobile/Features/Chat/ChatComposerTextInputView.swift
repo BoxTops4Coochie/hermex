@@ -62,6 +62,8 @@ private struct ComposerTextView: UIViewRepresentable {
     @Binding var isFocused: Bool
     let isDisabled: Bool
     let isKeyboardSendEnabled: Bool
+    /// Expanded-editor mode: no height cap, internal scrolling instead (#365).
+    var noHeightCap: Bool = false
     let onKeyboardSend: () -> Void
     let onHeightChange: (CGFloat) -> Void
     let onPasteFileProviders: ([NSItemProvider]) -> Void
@@ -96,6 +98,7 @@ private struct ComposerTextView: UIViewRepresentable {
         textView.onPasteFileURLs = onPasteFileURLs
         textView.onPasteImageProviders = onPasteImageProviders
         textView.onPasteImages = onPasteImages
+        context.coordinator.isHeightCapped = !noHeightCap
         context.coordinator.reportHeight(for: textView)
         return textView
     }
@@ -123,6 +126,7 @@ private struct ComposerTextView: UIViewRepresentable {
         textView.onPasteImageProviders = onPasteImageProviders
         textView.onPasteImages = onPasteImages
         context.coordinator.syncFocus(for: textView, shouldFocus: isFocused, isDisabled: isDisabled)
+        context.coordinator.isHeightCapped = !noHeightCap
         context.coordinator.reportHeight(for: textView)
     }
 
@@ -221,8 +225,16 @@ private struct ComposerTextView: UIViewRepresentable {
 
             let fittingSize = CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)
             let height = ceil(textView.sizeThatFits(fittingSize).height)
-            onHeightChange(min(96, max(22, height)))
+            if isHeightCapped {
+                onHeightChange(min(96, max(22, height)))
+            } else {
+                onHeightChange(max(22, height))
+            }
         }
+
+        /// Expanded-editor instances run uncapped — the editor scrolls inside
+        /// the full-height card rather than growing the inline composer (#365).
+        var isHeightCapped: Bool = true
     }
 
     final class PastingTextView: UITextView {
