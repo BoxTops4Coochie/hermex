@@ -165,7 +165,26 @@ enum CacheStore {
                     && cachedMessage.sessionID == sessionID
             }
         )
-        let staleMessages = try context.fetch(descriptor).filter { !freshKeys.contains($0.cacheKey) }
+        // Pagination-aware staleness (bug audit #4, raid-4-confirmed): a
+        // NON-EMPTY write carries the currently loaded WINDOW, not the whole
+        // session. Rows whose keys are missing may be older pages the user
+        // explicitly loaded ("Load earlier"); deleting them on every
+        // completion-time re-cache progressively shrinks offline history to
+        // the newest window. So for non-empty writes, a stale row is deleted
+        // only when its sortIndex falls INSIDE the written span
+        // [0, messages.count) — content the window itself replaced. Rows at
+        // sortIndex >= count are deliberately-loaded history: preserved,
+        // bounded by the global CachePolicy.maxMessages eviction (LRU by
+        // cachedAt) and the TTL maintenance pass below.
+        // An EMPTY write keeps the legacy full-wipe semantics: the server
+        // reported no messages for the session, so the whole cached window
+        // is stale (pinned by
+        // testCacheMessagesForOneServerDoesNotDeleteAnotherServersMessages).
+        let windowSpan = messages.isEmpty ? Int.max : messages.count
+        let staleMessages = try context.fetch(descriptor).filter { cachedMessage in
+            guard !freshKeys.contains(cachedMessage.cacheKey) else { return false }
+            return cachedMessage.sortIndex < windowSpan
+        }
         for staleMessage in staleMessages {
             context.delete(staleMessage)
         }
@@ -360,7 +379,8 @@ private extension ChatMessage {
             contentParts: contentParts,
             reasoning: cachedMessage.reasoning,
             attachments: attachments,
-            turnTps: cachedMessage.turnTps
+            turnTps: cachedMessage.turnTps,
+            turnTtft: cachedMessage.turnTtft
         )
     }
 }

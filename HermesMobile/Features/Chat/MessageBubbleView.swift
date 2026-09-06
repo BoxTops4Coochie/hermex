@@ -138,6 +138,11 @@ struct MessageBubbleView: View {
                 Text(speed)
                     .foregroundStyle(.secondary)
             }
+
+            if let ttft = assistantTTFTText {
+                Text(ttft)
+                    .foregroundStyle(.secondary)
+            }
         }
         .font(AppFont.footnote())
         .accessibilityElement(children: .ignore)
@@ -150,7 +155,8 @@ struct MessageBubbleView: View {
             hasTextContent: hasVisibleAssistantText,
             isEnabled: showsAssistantTurnTimestamps,
             showsResponseSpeed: showsResponseSpeed,
-            hasResponseSpeed: assistantResponseSpeedText != nil
+            hasResponseSpeed: assistantResponseSpeedText != nil,
+            hasTTFT: assistantTTFTText != nil
         )
     }
 
@@ -167,6 +173,11 @@ struct MessageBubbleView: View {
         return AssistantTurnTimestampFormatter.shortTime(forUnixTimestamp: message.timestamp)
     }
 
+    private var assistantTTFTText: String? {
+        guard showsResponseSpeed else { return nil }
+        return ResponseSpeedFormatter.ttftCompactText(message.turnTtft)
+    }
+
     private var assistantResponseSpeedText: String? {
         guard showsResponseSpeed else { return nil }
         return ResponseSpeedFormatter.compactText(isStreaming ? liveTokensPerSecond : message.turnTps)
@@ -175,10 +186,16 @@ struct MessageBubbleView: View {
     private var assistantTurnHeaderAccessibilityLabel: String {
         let details = [
             assistantTurnTimeText,
-            assistantResponseSpeedAccessibilityText
+            assistantResponseSpeedAccessibilityText,
+            assistantTTFTAccessibilityText
         ].compactMap { $0 }
         guard !details.isEmpty else { return String(localized: "Assistant") }
         return String(localized: "Assistant, \(details.joined(separator: ", "))")
+    }
+
+    private var assistantTTFTAccessibilityText: String? {
+        guard showsResponseSpeed else { return nil }
+        return ResponseSpeedFormatter.ttftAccessibilityText(message.turnTtft)
     }
 
     private var assistantResponseSpeedAccessibilityText: String? {
@@ -760,5 +777,23 @@ enum ResponseSpeedFormatter {
         guard let compact = compactText(tokensPerSecond, locale: locale) else { return nil }
         let value = compact.dropLast(4)
         return "\(value) \(String(localized: "tokens per second"))"
+    }
+
+    /// Compact time-to-first-token label, e.g. "1.2s TTFT".
+    static func ttftCompactText(_ ttftSeconds: Double?, locale: Locale = .autoupdatingCurrent) -> String? {
+        guard let ttftSeconds, ttftSeconds.isFinite, ttftSeconds >= 0 else { return nil }
+        let value = ttftSeconds.formatted(
+            .number.locale(locale).precision(.fractionLength(1))
+        )
+        return "\(value)s TTFT"
+    }
+
+    static func ttftAccessibilityText(
+        _ ttftSeconds: Double?,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String? {
+        guard let compact = ttftCompactText(ttftSeconds, locale: locale) else { return nil }
+        let value = compact.dropLast(5)
+        return "\(value) \(String(localized: "seconds to first token"))"
     }
 }

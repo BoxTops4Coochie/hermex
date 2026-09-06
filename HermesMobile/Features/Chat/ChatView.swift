@@ -299,6 +299,15 @@ struct ChatView: View {
     @State private var followScrollGeneration = 0
     @State private var isUserInteractingWithScroll = false
     @State private var userScrollCooldownUntil: Date?
+    /// Expanded long-draft editor presentation (#365). Root-level so the
+    /// proposal is screen-sized and the scrim genuinely covers the transcript.
+    @State private var showsExpandedComposerEditor = false
+    /// While a typing session is live (composer focused with a non-empty draft),
+    /// composer-height relayouts must not re-arm bottom auto-follow (#364). Typed
+    /// text grows the composer, re-lays-out the transcript, and the transient
+    /// scroll metrics during that resize can read as "near bottom" — which used
+    /// to yank a user who had just scrolled up back to the latest message.
+    @State private var isComposerTypingSessionActive = false
     /// While set and in the future, auto-follow scrolls snap instead of animating, so
     /// the cache-first → network reconcile re-pins to the bottom without a jump (#289).
     @State private var cacheFirstSnapUntil: Date?
@@ -434,6 +443,7 @@ struct ChatView: View {
             attachmentUploadGeneration: viewModel.attachmentUploadGeneration,
             isSendingVoiceNote: viewModel.isSendingVoiceNote,
             autoStartsVoiceInput: autoStartsVoiceInput,
+            onToggleExpandedEditor: toggleExpandedComposerEditor,
             apiClient: viewModel.client,
             uploadAttachmentErrorMessage: viewModel.uploadAttachmentErrorMessage,
             onSend: {
@@ -615,6 +625,9 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             GitActionToastOverlay(state: gitToastState)
         }
+        .overlay {
+            expandedComposerOverlay
+        }
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("chat-detail:\(viewModel.displayTitle)")
@@ -678,6 +691,11 @@ struct ChatView: View {
                 guard viewModel.responseCompletionHapticTrigger > 0 else { return }
                 handleResponseCompletionSideEffects()
             }
+            .modifier(ComposerTypingSessionGate(
+                composerIsFocused: composerIsFocused,
+                draftMessage: draftMessage,
+                onUpdate: updateComposerTypingSession
+            ))
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ChatToolbarTitleLabel(
@@ -1537,6 +1555,9 @@ struct ChatView: View {
             } else {
                 composerIsFocused = false
             }
+            // The draft is consumed: end the typing session so follow-bottom
+            // resumes for the outgoing+incoming exchange (#364).
+            updateComposerTypingSession()
         }
 
         if let lastError = viewModel.lastError {
@@ -2373,6 +2394,9 @@ struct ChatView: View {
             guard !Task.isCancelled, generation == followScrollGeneration else { return }
             // Re-check at fire time: a gesture may have begun during the delay.
             if !isUserInitiated, isAutoFollowScrollPaused { return }
+            // A queued follow must not yank the viewport during an active
+            // typing session (#364), even if it slipped past the earlier gate.
+            if !isUserInitiated, isComposerTypingSessionActive { return }
 
             // Snap (no animation) while inside the cache-first reconcile window so the
             // taller server transcript replacing the cached one doesn't animate a jump
@@ -2469,7 +2493,14 @@ struct ChatView: View {
         }
 
         if isNearBottom {
-            shouldFollowLatestMessage = true
+            // While the user is mid-typing-session, treat this transient
+            // near-bottom reading as layout-settle noise from composer
+            // height changes — do not re-arm auto-follow (#364). Without
+            // this, typing into a long draft after scrolling up snaps the
+            // viewport back to the latest message on every keystroke burst.
+            if !isComposerTypingSessionActive {
+                shouldFollowLatestMessage = true
+            }
             if isReadingOlderTranscript {
                 withAnimation(ChatMotion.quickState(reduceMotion: reduceMotion)) {
                     isReadingOlderTranscript = false
@@ -2487,6 +2518,55 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    /// Typing-session gate (see `isComposerTypingSessionActive` docs): a focused
+    /// composer with text in it owns scroll positioning until the draft is
+    /// cleared or focus drops (#364).
+    private func updateComposerTypingSession() {
+        let isActive = composerIsFocused && !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isComposerTypingSessionActive != isActive {
+            isComposerTypingSessionActive = isActive
+        }
+    }
+
+    @ViewBuilder
+    private var expandedComposerOverlay: some View {
+        // Extracted from `body` per the #316 precedent: keeping the editor's
+        // multi-argument init inline pushes ChatView.body over Xcode's
+        // type-check-in-reasonable-time budget.
+        if showsExpandedComposerEditor {
+            ComposerExpandedEditor(
+                text: $draftMessage,
+                isSendDisabled: isExpandedSendDisabled,
+                onSend: {
+                    showsExpandedComposerEditor = false
+                    Task { await sendDraftMessage() }
+                },
+                onCollapse: {
+                    showsExpandedComposerEditor = false
+                }
+            )
+            .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
+        }
+    }
+
+    private var isExpandedSendDisabled: Bool {
+        trimmedDraftIsEmpty || viewModel.isStartingChat || viewModel.isCompressingSession
+    }
+
+    private var trimmedDraftIsEmpty: Bool {
+        draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+        /// Presents the expanded editor (#365): resign inline focus, show overlay.
+    /// The expanded editor manages its own first responder; the shared draft
+    /// binding carries the text both directions and the expanded send path
+    /// reuses `sendDraftMessage()` so slash handling/haptics stay identical.
+    private func toggleExpandedComposerEditor() {
+        guard !showsExpandedComposerEditor else { return }
+        composerIsFocused = false
+        showsExpandedComposerEditor = true
     }
 
     private var isAutoFollowScrollPaused: Bool {

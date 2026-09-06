@@ -57,11 +57,13 @@ struct ComposerTextInputView: View {
     }
 }
 
-private struct ComposerTextView: UIViewRepresentable {
+struct ComposerTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     let isDisabled: Bool
     let isKeyboardSendEnabled: Bool
+    /// Expanded-editor mode: no height cap, internal scrolling instead (#365).
+    var noHeightCap: Bool = false
     let onKeyboardSend: () -> Void
     let onHeightChange: (CGFloat) -> Void
     let onPasteFileProviders: ([NSItemProvider]) -> Void
@@ -96,6 +98,7 @@ private struct ComposerTextView: UIViewRepresentable {
         textView.onPasteFileURLs = onPasteFileURLs
         textView.onPasteImageProviders = onPasteImageProviders
         textView.onPasteImages = onPasteImages
+        context.coordinator.isHeightCapped = !noHeightCap
         context.coordinator.reportHeight(for: textView)
         return textView
     }
@@ -123,6 +126,7 @@ private struct ComposerTextView: UIViewRepresentable {
         textView.onPasteImageProviders = onPasteImageProviders
         textView.onPasteImages = onPasteImages
         context.coordinator.syncFocus(for: textView, shouldFocus: isFocused, isDisabled: isDisabled)
+        context.coordinator.isHeightCapped = !noHeightCap
         context.coordinator.reportHeight(for: textView)
     }
 
@@ -132,6 +136,7 @@ private struct ComposerTextView: UIViewRepresentable {
         @Binding var isFocused: Bool
         var onHeightChange: (CGFloat) -> Void
         private var pendingFocusTarget: Bool?
+        private var pendingFocusTask: Task<Void, Never>?
 
         init(
             text: Binding<String>,
@@ -152,29 +157,50 @@ private struct ComposerTextView: UIViewRepresentable {
 
             let target = shouldFocus && !isDisabled
             guard textView.isFirstResponder != target else {
+                // The live state already matches the request: a scheduled
+                // focus/resign Task from an older snapshot is now obsolete,
+                // so cancel it and disarm the pending marker together.
+                pendingFocusTask?.cancel()
+                pendingFocusTask = nil
                 pendingFocusTarget = nil
                 return
             }
             guard pendingFocusTarget != target else { return }
 
             pendingFocusTarget = target
-            Task { @MainActor [weak self, weak textView] in
+            // True cancellation, not just a point-in-time re-check (raid-4
+            // finding): a previously scheduled focus/resign Task must never
+            // run after a newer decision replaces it — checking `isFocused`
+            // at execution time leaves an interleave where a stale resign
+            // evicts a fresh becomeFirstResponder between the re-check and
+            // the call. Cancelling the old Task closes that window.
+            pendingFocusTask?.cancel()
+            let task = Task { @MainActor [weak self, weak textView] in
                 await Task.yield()
+                try? Task.checkCancellation()
                 guard let self, let textView else { return }
 
                 if target, textView.window == nil {
                     try? await Task.sleep(nanoseconds: 60_000_000)
                 }
+                try? Task.checkCancellation()
 
                 self.pendingFocusTarget = nil
-
                 if target {
                     guard self.isFocused, textView.isEditable, textView.window != nil else { return }
                     textView.becomeFirstResponder()
                 } else if textView.isFirstResponder {
+                    // Re-read the binding before evicting: a tap (or send-focus
+                    // restore) may have re-requested keyboard focus after this
+                    // resign was scheduled from a stale isFocused snapshot.
+                    // Without this re-check SwiftUI sends false -> resign -> the
+                    // keyboard drops right after rising on rapid transcript
+                    // updates during streaming.
+                    guard !self.isFocused else { return }
                     textView.resignFirstResponder()
                 }
             }
+            pendingFocusTask = task
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
@@ -199,8 +225,16 @@ private struct ComposerTextView: UIViewRepresentable {
 
             let fittingSize = CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)
             let height = ceil(textView.sizeThatFits(fittingSize).height)
-            onHeightChange(min(96, max(22, height)))
+            if isHeightCapped {
+                onHeightChange(min(96, max(22, height)))
+            } else {
+                onHeightChange(max(22, height))
+            }
         }
+
+        /// Expanded-editor instances run uncapped — the editor scrolls inside
+        /// the full-height card rather than growing the inline composer (#365).
+        var isHeightCapped: Bool = true
     }
 
     final class PastingTextView: UITextView {

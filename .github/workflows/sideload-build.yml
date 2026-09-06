@@ -1,9 +1,11 @@
-# Personal sideload build: compiles the Hermex fork for a real device and
-# uploads an UNSIGNED .ipa artifact. Sideloadly (or AltStore) re-signs it
-# locally with a free personal-team Apple ID — no certificates in CI.
+# Personal sideload build for Hermex (private copy BoxTops4Coochie/hermex).
+# Builds the HermesMobile scheme for a real arm64 device with the personal
+# bundle id, then uploads an UNSIGNED .ipa. Sideloadly (Windows PC .96)
+# re-signs with a free personal-team Apple ID — no certs in CI.
 #
-# Bundle id / app group are overridden via Config/Local.xcconfig (the file
-# Shared.xcconfig includes last) so nothing in the project file changes.
+# Identity override uses the repo's contributor mechanism: Config/Shared.xcconfig
+# ends with #include? "Local.xcconfig", so writing Local.xcconfig overrides
+# everything without touching project.pbxproj.
 
 name: Sideload Build
 

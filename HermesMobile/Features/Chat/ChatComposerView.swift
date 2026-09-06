@@ -109,6 +109,8 @@ struct MessageComposerView: View {
     /// When true, dictation auto-starts once this composer appears with the app active —
     /// the "New Chat with Voice" App Intent (#338). Defaults to false for normal composers.
     let autoStartsVoiceInput: Bool
+    /// Presents the expanded long-draft editor (#365); ChatView owns the state.
+    let onToggleExpandedEditor: () -> Void
     let apiClient: APIClient?
     let uploadAttachmentErrorMessage: String?
     let onSend: () -> Void
@@ -331,6 +333,23 @@ struct MessageComposerView: View {
                         }
 
                         Spacer(minLength: 0)
+
+                        Button {
+                            // Only meaningful while there's text worth expanding (#365).
+                            guard !trimmedDraftMessage.isEmpty else { return }
+                            onToggleExpandedEditor()
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: actionIconSize, weight: .medium))
+                                .foregroundStyle(metaControlColor)
+                                .frame(width: actionButtonSize, height: actionButtonSize)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.chatTactile(.icon))
+                        .disabled(trimmedDraftMessage.isEmpty)
+                        .opacity(trimmedDraftMessage.isEmpty ? 0.35 : 1)
+                        .accessibilityLabel("Expand composer")
+                        .accessibilityHint("Opens a full-screen editor for long drafts")
 
                         ComposerVoiceControlButton(
                             isListening: voiceInput.isListening,
