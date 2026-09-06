@@ -57,7 +57,7 @@ struct ComposerTextInputView: View {
     }
 }
 
-private struct ComposerTextView: UIViewRepresentable {
+struct ComposerTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     let isDisabled: Bool
