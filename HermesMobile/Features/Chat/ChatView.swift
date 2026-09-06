@@ -2557,13 +2557,6 @@ struct ChatView: View {
         showsExpandedComposerEditor = true
     }
 
-    private func updateComposerTypingSession() {
-        let isActive = composerIsFocused && !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if isComposerTypingSessionActive != isActive {
-            isComposerTypingSessionActive = isActive
-        }
-    }
-
     private var isAutoFollowScrollPaused: Bool {
         ChatScrollPolicy.isAutoScrollPaused(
             isUserInteracting: isUserInteractingWithScroll,
