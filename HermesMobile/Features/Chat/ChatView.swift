@@ -691,12 +691,11 @@ struct ChatView: View {
                 guard viewModel.responseCompletionHapticTrigger > 0 else { return }
                 handleResponseCompletionSideEffects()
             }
-            .onChange(of: composerIsFocused) { _, _ in
-                updateComposerTypingSession()
-            }
-            .onChange(of: draftMessage) { _, _ in
-                updateComposerTypingSession()
-            }
+            .modifier(ComposerTypingSessionGate(
+                composerIsFocused: composerIsFocused,
+                draftMessage: draftMessage,
+                onUpdate: updateComposerTypingSession
+            ))
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ChatToolbarTitleLabel(
