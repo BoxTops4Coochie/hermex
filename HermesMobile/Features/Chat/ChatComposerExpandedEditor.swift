@@ -39,7 +39,10 @@ struct ComposerExpandedEditor: View {
 
                 ComposerTextView(
                     text: $text,
-                    isFocused: $editorFocused,
+                    isFocused: Binding(
+                        get: { editorFocused },
+                        set: { editorFocused = $0 }
+                    ),
                     isDisabled: false,
                     isKeyboardSendEnabled: false,
                     noHeightCap: true,
