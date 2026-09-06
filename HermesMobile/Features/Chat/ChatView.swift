@@ -626,24 +626,8 @@ struct ChatView: View {
             GitActionToastOverlay(state: gitToastState)
         }
         .overlay {
-            if showsExpandedComposerEditor {
-                ComposerExpandedEditor(
-                    text: $draftMessage,
-                    isSendDisabled: draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || viewModel.isStartingChat
-                        || viewModel.isCompressingSession,
-                    onSend: {
-                        showsExpandedComposerEditor = false
-                        Task { await sendDraftMessage() }
-                    },
-                    onCollapse: {
-                        showsExpandedComposerEditor = false
-                    }
-                )
-                .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
-            }
+            expandedComposerOverlay
         }
-        .animation(ChatMotion.quickState(reduceMotion: reduceMotion), value: showsExpandedComposerEditor)
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("chat-detail:\(viewModel.displayTitle)")
@@ -2547,7 +2531,36 @@ struct ChatView: View {
         }
     }
 
-    /// Presents the expanded editor (#365): resign inline focus, show overlay.
+    @ViewBuilder
+    private var expandedComposerOverlay: some View {
+        // Extracted from `body` per the #316 precedent: keeping the editor's
+        // multi-argument init inline pushes ChatView.body over Xcode's
+        // type-check-in-reasonable-time budget.
+        if showsExpandedComposerEditor {
+            ComposerExpandedEditor(
+                text: $draftMessage,
+                isSendDisabled: isExpandedSendDisabled,
+                onSend: {
+                    showsExpandedComposerEditor = false
+                    Task { await sendDraftMessage() }
+                },
+                onCollapse: {
+                    showsExpandedComposerEditor = false
+                }
+            )
+            .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
+        }
+    }
+
+    private var isExpandedSendDisabled: Bool {
+        trimmedDraftIsEmpty || viewModel.isStartingChat || viewModel.isCompressingSession
+    }
+
+    private var trimmedDraftIsEmpty: Bool {
+        draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+        /// Presents the expanded editor (#365): resign inline focus, show overlay.
     /// The expanded editor manages its own first responder; the shared draft
     /// binding carries the text both directions and the expanded send path
     /// reuses `sendDraftMessage()` so slash handling/haptics stay identical.

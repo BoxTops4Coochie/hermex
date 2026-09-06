@@ -102,7 +102,7 @@
 		C042A000000000000000001 /* ChatComposerSelectorControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C042A000000000000000002 /* ChatComposerSelectorControls.swift */; };
 		C042A000000000000000003 /* ChatComposerSelectorSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C042A000000000000000004 /* ChatComposerSelectorSheets.swift */; };
 		C04900000000000000000001 /* ChatComposerTextInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04900000000000000000002 /* ChatComposerTextInputView.swift */; };
-		C0AA00000000000000000002 /* ChatComposerExpandedEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0AA00000000000000000001 /* ChatComposerExpandedEditor.swift */ };
+		C0AA00000000000000000002 /* ChatComposerExpandedEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0AA00000000000000000001 /* ChatComposerExpandedEditor.swift */; };
 		C04900000000000000000003 /* ChatComposerVoiceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04900000000000000000004 /* ChatComposerVoiceControls.swift */; };
 		C04700000000000000000001 /* ChatPendingActionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04700000000000000000002 /* ChatPendingActionCoordinator.swift */; };
 		C04800000000000000000001 /* ChatAttachmentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04800000000000000000002 /* ChatAttachmentCoordinator.swift */; };
