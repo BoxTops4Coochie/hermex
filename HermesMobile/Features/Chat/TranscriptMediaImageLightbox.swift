@@ -120,7 +120,7 @@ struct TranscriptMediaImageLightbox: View {
             guard let image = UIImage(data: data) else {
                 return .failure(String(localized: "Could not decode this image."))
             }
-            return .image(image, detail: detailText)
+            return .image(image, identity: item.reference.rawReference, detail: detailText)
         }
 
         if !viewModel.isLoading, let message = viewModel.errorMessage {

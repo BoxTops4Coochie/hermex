@@ -5,9 +5,24 @@ import UIKit
 /// and attachment surfaces keep their own loading, retry, and error rules.
 enum ImageLightboxContent {
     case loading(String)
-    /// `detail` is the one-line fact under the path, usually the file size.
-    case image(UIImage, detail: String?)
+    /// `identity` is the caller's stable per-media key, so a re-render that rebuilds the
+    /// same image keeps its zoom while genuinely new media re-fits. `detail` is the
+    /// one-line fact under the path, usually the file size.
+    case image(UIImage, identity: String, detail: String?)
     case failure(String)
+}
+
+/// When a lightbox's scroll view must re-fit its image. A pure re-render rebuilds the
+/// same `UIImage` from the same bytes, so the decision runs on the caller's identity
+/// instead of object identity, which would reset the user's zoom on every body evaluation.
+enum ImageLightboxLayoutPolicy {
+    /// `oldIdentity == nil` is the first image in a fresh scroll view and always lays
+    /// out; the same identity twice is a re-render and keeps the zoom and pan.
+    static func shouldResetLayout(oldIdentity: String?, newIdentity: String?) -> Bool {
+        guard let newIdentity else { return false }
+        guard let oldIdentity else { return true }
+        return oldIdentity != newIdentity
+    }
 }
 
 /// The gesture thresholds of the lightbox, kept apart from UIKit so they can be reasoned
@@ -116,9 +131,10 @@ struct ImageLightboxView<Actions: View>: View {
                     .foregroundStyle(.white.opacity(0.6))
             }
 
-        case let .image(image, _):
+        case let .image(image, identity, _):
             ZoomableImageView(
                 image: image,
+                imageIdentity: identity,
                 reduceMotion: reduceMotion,
                 onSingleTap: { showsChrome.toggle() },
                 onZoomChange: { isZoomed = $0 },
@@ -195,7 +211,7 @@ struct ImageLightboxView<Actions: View>: View {
                 .lineLimit(2)
                 .truncationMode(.head)
 
-            if case let .image(_, detail) = content, let detail {
+            if case let .image(_, _, detail) = content, let detail {
                 Text(detail)
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.5))
@@ -274,6 +290,9 @@ struct ImageLightboxActionButton: View {
 /// start only at fit scale so it can never steal a pan from a zoomed image.
 struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage
+    /// The caller's stable per-media key. A re-render can rebuild the same `UIImage`, so
+    /// only a change here re-fits the scroll view and throws away the user's zoom.
+    let imageIdentity: String
     let reduceMotion: Bool
     let onSingleTap: () -> Void
     let onZoomChange: (Bool) -> Void
@@ -339,9 +358,16 @@ struct ZoomableImageView: UIViewRepresentable {
         coordinator.onZoomChange = onZoomChange
         coordinator.onDismiss = onDismiss
 
-        if coordinator.imageView?.image !== image {
+        if ImageLightboxLayoutPolicy.shouldResetLayout(
+            oldIdentity: coordinator.imageIdentity,
+            newIdentity: imageIdentity
+        ) {
+            coordinator.imageIdentity = imageIdentity
             coordinator.imageView?.image = image
             coordinator.layoutImage(in: scrollView.bounds.size)
+        } else if coordinator.imageView?.image !== image {
+            // Same media rebuilt by a re-render: swap the pixels without re-fitting.
+            coordinator.imageView?.image = image
         }
     }
 
@@ -355,6 +381,7 @@ struct ZoomableImageView: UIViewRepresentable {
         weak var dismissPan: UIPanGestureRecognizer?
 
         var reduceMotion = false
+        var imageIdentity: String?
         var onSingleTap: () -> Void = {}
         var onZoomChange: (Bool) -> Void = { _ in }
         var onDismiss: () -> Void = {}

@@ -216,6 +216,7 @@
 		1F16000000000000000000B5 /* FileIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F16000000000000000000F5 /* FileIcon.swift */; };
 		1F16000000000000000000B6 /* FileReferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F16000000000000000000F6 /* FileReferenceTests.swift */; };
 		1F18000000000000000000B4 /* ImageLightboxGesturePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F18000000000000000000A4 /* ImageLightboxGesturePolicyTests.swift */; };
+		1F18000000000000000000B5 /* ImageLightboxLayoutPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F18000000000000000000A5 /* ImageLightboxLayoutPolicyTests.swift */; };
 		1F18000000000000000000B3 /* TranscriptMarkdownImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F18000000000000000000A3 /* TranscriptMarkdownImageTests.swift */; };
 		1F16000000000000000000B7 /* FileIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F16000000000000000000F7 /* FileIconTests.swift */; };
 		1A2B3C4D5E6F7000000000E8 /* FilePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7000000000E9 /* FilePreviewView.swift */; };
@@ -660,6 +661,7 @@
 		1F16000000000000000000F5 /* FileIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIcon.swift; sourceTree = "<group>"; };
 		1F16000000000000000000F6 /* FileReferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileReferenceTests.swift; sourceTree = "<group>"; };
 		1F18000000000000000000A4 /* ImageLightboxGesturePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLightboxGesturePolicyTests.swift; sourceTree = "<group>"; };
+		1F18000000000000000000A5 /* ImageLightboxLayoutPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLightboxLayoutPolicyTests.swift; sourceTree = "<group>"; };
 		1F18000000000000000000A3 /* TranscriptMarkdownImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptMarkdownImageTests.swift; sourceTree = "<group>"; };
 		1F16000000000000000000F7 /* FileIconTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIconTests.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7000000000E9 /* FilePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewView.swift; sourceTree = "<group>"; };
@@ -1049,6 +1051,7 @@
 				1F16000000000000000000F2 /* FileTreeTests.swift */,
 				1F16000000000000000000F6 /* FileReferenceTests.swift */,
 				1F18000000000000000000A4 /* ImageLightboxGesturePolicyTests.swift */,
+				1F18000000000000000000A5 /* ImageLightboxLayoutPolicyTests.swift */,
 				1F18000000000000000000A3 /* TranscriptMarkdownImageTests.swift */,
 				1F16000000000000000000F7 /* FileIconTests.swift */,
 				1F16000000000000000000F3 /* FileBrowserViewModelTests.swift */,
@@ -2097,6 +2100,7 @@
 				1F16000000000000000000B2 /* FileTreeTests.swift in Sources */,
 				1F16000000000000000000B6 /* FileReferenceTests.swift in Sources */,
 				1F18000000000000000000B4 /* ImageLightboxGesturePolicyTests.swift in Sources */,
+				1F18000000000000000000B5 /* ImageLightboxLayoutPolicyTests.swift in Sources */,
 				1F18000000000000000000B3 /* TranscriptMarkdownImageTests.swift in Sources */,
 				1F16000000000000000000B7 /* FileIconTests.swift in Sources */,
 				1F16000000000000000000B3 /* FileBrowserViewModelTests.swift in Sources */,
