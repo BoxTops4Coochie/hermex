@@ -223,11 +223,27 @@ final class ChatPendingActionCoordinator {
         defer { isRespondingToClarification = false }
 
         do {
-            _ = try await client.respondClarification(
+            let response = try await client.respondClarification(
                 sessionID: prompt.sessionID,
                 response: response,
                 clarifyID: prompt.pending.clarifyId
             )
+
+            // The server answers HTTP 200 with `{"ok": false}` for protective
+            // refusals and expired prompts (same shape as approvals), so only
+            // a non-2xx status threw and a refusal or expiry read as success:
+            // the card was cleared, the user was told nothing, and the agent
+            // stayed blocked. `stale_cleared` is the one false that still
+            // means "this card is finished".
+            //
+            // Only an explicit success may clear a live card. A missing `ok`
+            // is unknown and must fail closed.
+            guard response.ok == true || response.staleCleared == true else {
+                clarificationErrorMessage = String(localized: "The server did not accept that response. The request is still waiting.")
+                await refreshClarificationPending(sessionID: prompt.sessionID)
+                return false
+            }
+
             clarificationPendingBySession[prompt.sessionID] = nil
             clarificationPrompt = nil
             await refreshClarificationPending(sessionID: prompt.sessionID)
