@@ -282,8 +282,16 @@ struct SkillDetailView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var selectedFile: String?
-    @State private var fileContent: String?
-    @State private var isLoadingFile = false
+    @State private var linkedFileModel: SkillLinkedFileViewModel
+
+    init(skill: SkillSummary, server: URL, onAPIError: @escaping (Error) -> Void) {
+        self.skill = skill
+        self.server = server
+        self.onAPIError = onAPIError
+        _linkedFileModel = State(
+            initialValue: SkillLinkedFileViewModel(server: server, skillName: skill.name)
+        )
+    }
 
     var body: some View {
         content
@@ -309,8 +317,8 @@ struct SkillDetailView: View {
                 NavigationStack {
                     SkillLinkedFileView(
                         fileName: fileName,
-                        content: fileContent,
-                        isLoading: isLoadingFile
+                        content: linkedFileModel.fileContent,
+                        isLoading: linkedFileModel.isLoadingFile
                     )
                 }
                 .adaptivePagePresentation()
@@ -375,17 +383,59 @@ struct SkillDetailView: View {
     }
 
     private func loadLinkedFile(named fileName: String) async {
-        guard let name = skill.name else { return }
-        isLoadingFile = true
+        guard skill.name != nil else { return }
         selectedFile = fileName
-        defer { isLoadingFile = false }
+        await linkedFileModel.load(named: fileName)
+    }
+}
+
+/// Backs `SkillDetailView`'s linked-file sheet. The sheet can be dismissed and
+/// reopened for another file while a fetch is still in flight, so every load
+/// carries a generation token: a superseded response is discarded instead of
+/// overwriting the newer file's content, and it never clears `isLoadingFile`
+/// while the newer request is still pending.
+@MainActor
+@Observable
+final class SkillLinkedFileViewModel {
+    private(set) var fileContent: String?
+    private(set) var isLoadingFile = false
+
+    private let skillName: String?
+    private let apiClient: APIClient
+
+    /// Monotonic token identifying the most recent `load(named:)` call. An
+    /// older in-flight load must not mutate state after a newer one started.
+    private var loadGeneration = 0
+
+    init(server: URL, skillName: String?, apiClient: APIClient? = nil) {
+        self.skillName = skillName
+        self.apiClient = apiClient ?? APIClient(baseURL: server)
+    }
+
+    func load(named fileName: String) async {
+        guard let skillName else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+
+        isLoadingFile = true
 
         do {
-            let response = try await APIClient(baseURL: server).skillContent(name: name, file: fileName)
+            let response = try await apiClient.skillContent(name: skillName, file: fileName)
+            guard generation == loadGeneration else { return }
             fileContent = response.content
+        } catch is CancellationError {
+            // The owning sheet was torn down mid-request — don't surface
+            // "cancelled" as file content.
+        } catch let error as URLError where error.code == .cancelled {
+            // Same cancellation, surfaced through URLSession.
         } catch {
+            guard generation == loadGeneration else { return }
             fileContent = String(localized: "Could not load file: \(error.localizedDescription)")
         }
+
+        // A newer load owns the loading state now — leave it alone.
+        guard generation == loadGeneration else { return }
+        isLoadingFile = false
     }
 }
 
