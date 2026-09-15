@@ -30,6 +30,7 @@ final class ComposerVoiceInputController {
     private var recordingURL: URL?
     private var draftUpdateSession = ComposerVoiceDraftUpdateSession()
     private var updateDraft: ((String) -> Void)?
+    private var currentDraftProvider: () -> String = { "" }
     private var suppressNextRecognitionError = false
     private var activatedAudioSessionForRecording = false
     private var audioTapInstalled = false
@@ -57,11 +58,19 @@ final class ComposerVoiceInputController {
         state == .requestingPermission
     }
 
-    func toggle(currentDraft: String, updateDraft: @escaping (String) -> Void) async {
+    func toggle(
+        currentDraft: String,
+        updateDraft: @escaping (String) -> Void,
+        currentDraftProvider: @escaping () -> String
+    ) async {
         if isListening {
             stopKeepingTranscript()
         } else {
-            await start(currentDraft: currentDraft, updateDraft: updateDraft)
+            await start(
+                currentDraft: currentDraft,
+                updateDraft: updateDraft,
+                currentDraftProvider: currentDraftProvider
+            )
         }
     }
 
@@ -91,7 +100,11 @@ final class ComposerVoiceInputController {
         state = .idle
     }
 
-    private func start(currentDraft: String, updateDraft: @escaping (String) -> Void) async {
+    private func start(
+        currentDraft: String,
+        updateDraft: @escaping (String) -> Void,
+        currentDraftProvider: @escaping () -> String
+    ) async {
         guard state == .idle else { return }
 
         logger.info("Voice input start requested")
@@ -102,6 +115,7 @@ final class ComposerVoiceInputController {
         discardServerRecording()
         draftUpdateSession.begin(baseDraft: currentDraft)
         self.updateDraft = updateDraft
+        self.currentDraftProvider = currentDraftProvider
         state = .requestingPermission
 
         let canUseServer = apiClient != nil
@@ -429,9 +443,7 @@ final class ComposerVoiceInputController {
             if let transcript = response.transcript?.trimmingCharacters(in: .whitespacesAndNewlines),
                !transcript.isEmpty {
                 liveTranscript = transcript
-                if let composedDraft = draftUpdateSession.composedDraft(for: transcript) {
-                    updateDraft?(composedDraft)
-                }
+                applyDraftUpdate(for: transcript)
                 stopAcceptingDraftUpdates()
                 cleanupRecordingFile(recordingURL, transcriptionID: transcriptionID)
                 state = .idle
@@ -507,9 +519,7 @@ final class ComposerVoiceInputController {
                 )
                 return
             }
-            if let composedDraft = draftUpdateSession.composedDraft(for: transcript) {
-                updateDraft?(composedDraft)
-            }
+            applyDraftUpdate(for: transcript)
             stopAcceptingDraftUpdates()
             cleanupRecordingFile(recordingURL, transcriptionID: transcriptionID)
             state = .idle
@@ -639,9 +649,7 @@ final class ComposerVoiceInputController {
     private func handleRecognition(result: SFSpeechRecognitionResult?, error: Error?) {
         if let result {
             liveTranscript = result.bestTranscription.formattedString
-            if let composedDraft = draftUpdateSession.composedDraft(for: liveTranscript) {
-                updateDraft?(composedDraft)
-            }
+            applyDraftUpdate(for: liveTranscript)
         }
 
         if let error {
@@ -661,9 +669,22 @@ final class ComposerVoiceInputController {
         }
     }
 
+    /// Composes the draft for `transcript` against the composer's live draft
+    /// and hands it to `updateDraft` only when the session allows the write;
+    /// see `ComposerVoiceDraftUpdateSession` for the divergence contract.
+    private func applyDraftUpdate(for transcript: String) {
+        if let composedDraft = draftUpdateSession.composedDraft(
+            for: transcript,
+            currentDraft: currentDraftProvider()
+        ) {
+            updateDraft?(composedDraft)
+        }
+    }
+
     private func stopAcceptingDraftUpdates() {
         draftUpdateSession.stopAcceptingUpdates()
         updateDraft = nil
+        currentDraftProvider = { "" }
     }
 
     private func stopAudio(cancelTask: Bool) {
@@ -944,28 +965,63 @@ enum ComposerVoiceDraftComposer {
     }
 }
 
+/// Tracks the composer draft while dictation is live.
+///
+/// Contract with the composer: dictation may rewrite the draft only while the
+/// draft still matches what dictation last wrote, or the base draft captured
+/// when listening started if nothing has been written yet. The caller reads
+/// the composer's current draft and passes it as `currentDraft` on every
+/// recognition event. If the user typed while listening, their draft no longer
+/// matches, so `composedDraft(for:currentDraft:)` returns nil and the caller
+/// must skip the write; the user's typed text survives untouched. That
+/// divergence is not an error and is never surfaced to the user — dictation
+/// starts applying again as soon as the draft once again equals the last
+/// written value, for example after the user undoes their edit. Starting a new
+/// session with `begin(baseDraft:)` resets the comparison to that base draft.
 struct ComposerVoiceDraftUpdateSession {
     private var baseDraft = ""
     private var acceptsUpdates = false
+    private var lastWrittenDraft: String?
 
     mutating func begin(baseDraft: String) {
         self.baseDraft = baseDraft
         acceptsUpdates = true
+        lastWrittenDraft = nil
     }
 
     mutating func stopAcceptingUpdates() {
         acceptsUpdates = false
     }
 
-    func composedDraft(for transcript: String) -> String? {
+    /// Readback-free path for callers that cannot observe the composer's live
+    /// draft: it assumes the draft was never touched, so it behaves exactly
+    /// like the pre-readback composer. Production callers use
+    /// `composedDraft(for:currentDraft:)`.
+    mutating func composedDraft(for transcript: String) -> String? {
+        composedDraft(for: transcript, currentDraft: lastWrittenDraft ?? baseDraft)
+    }
+
+    /// Returns the draft to write for `transcript`, or nil when the composer's
+    /// current draft no longer matches what this session last wrote (the
+    /// divergence contract above). A non-nil result is recorded as the last
+    /// written draft before it is returned, so the caller can hand it to
+    /// `updateDraft` immediately after.
+    mutating func composedDraft(for transcript: String, currentDraft: String) -> String? {
         guard acceptsUpdates else {
             return nil
         }
 
-        return ComposerVoiceDraftComposer.composedDraft(
+        let reference = lastWrittenDraft ?? baseDraft
+        guard currentDraft == reference else {
+            return nil
+        }
+
+        let composed = ComposerVoiceDraftComposer.composedDraft(
             baseDraft: baseDraft,
             transcript: transcript
         )
+        lastWrittenDraft = composed
+        return composed
     }
 }
 

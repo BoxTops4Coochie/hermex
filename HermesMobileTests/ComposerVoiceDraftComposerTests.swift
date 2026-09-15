@@ -58,6 +58,63 @@ final class ComposerVoiceDraftComposerTests: XCTestCase {
         XCTAssertEqual(session.composedDraft(for: "transcript"), "New transcript")
     }
 
+    func testDraftUpdateSessionAppliesSequentialPartialsWithoutUserEdits() {
+        var harness = ComposerVoiceDraftUpdateHarness()
+        harness.beginListening(baseDraft: "Hello")
+
+        harness.recognize("world")
+        harness.recognize("again")
+        harness.recognize("one more time")
+
+        XCTAssertEqual(harness.spy.writtenDrafts, ["Hello world", "Hello again", "Hello one more time"])
+    }
+
+    func testDraftUpdateSessionSkipsWriteWhenUserTypesWhileListening() {
+        var harness = ComposerVoiceDraftUpdateHarness()
+        harness.beginListening(baseDraft: "Hello")
+
+        harness.recognize("world")
+        XCTAssertEqual(harness.spy.writtenDrafts, ["Hello world"])
+
+        harness.userTypes("Hello brave world")
+        harness.recognize("again")
+
+        XCTAssertEqual(
+            harness.spy.writtenDrafts,
+            ["Hello world"],
+            "Dictation must not overwrite the text the user typed while listening"
+        )
+    }
+
+    func testDraftUpdateSessionResumesAfterUserRestoresDraftToLastWrittenValue() {
+        var harness = ComposerVoiceDraftUpdateHarness()
+        harness.beginListening(baseDraft: "Hello")
+
+        harness.recognize("world")
+        harness.userTypes("Hello brave world")
+        harness.recognize("again")
+        XCTAssertEqual(harness.spy.writtenDrafts, ["Hello world"])
+
+        harness.userTypes("Hello world")
+        harness.recognize("again")
+
+        XCTAssertEqual(harness.spy.writtenDrafts, ["Hello world", "Hello again"])
+    }
+
+    func testDraftUpdateSessionSkipsFinalTranscriptWhenUserEditedDraft() {
+        var harness = ComposerVoiceDraftUpdateHarness()
+        harness.beginListening(baseDraft: "Hello")
+
+        harness.userTypes("Something else")
+        harness.recognize("final words")
+
+        XCTAssertEqual(
+            harness.spy.writtenDrafts,
+            [],
+            "The final transcript must not overwrite the text the user typed while listening"
+        )
+    }
+
     func testVoiceInputPreflightAcceptsValidInputFormatValues() {
         XCTAssertNoThrow(
             try ComposerVoiceInputPreflight.validate(sampleRate: 44_100, channelCount: 1)
@@ -276,4 +333,40 @@ final class ComposerVoiceDraftComposerTests: XCTestCase {
 private final class VoiceInputFactoryCounter {
     var speechRecognizerCalls = 0
     var audioEngineCalls = 0
+}
+
+private final class ComposerVoiceDraftUpdateSpy {
+    private(set) var writtenDrafts: [String] = []
+
+    func updateDraft(_ newDraft: String) {
+        writtenDrafts.append(newDraft)
+    }
+}
+
+/// Mirrors the controller's draft wiring so session tests run the same path
+/// production uses: the composer's live draft feeds the readback, and only a
+/// non-nil composed draft reaches the `updateDraft` spy (which also lands that
+/// write in the live draft, like `draftMessage = newDraft` does).
+private struct ComposerVoiceDraftUpdateHarness {
+    let spy = ComposerVoiceDraftUpdateSpy()
+    private var session = ComposerVoiceDraftUpdateSession()
+    private(set) var currentDraft = ""
+
+    mutating func beginListening(baseDraft: String) {
+        currentDraft = baseDraft
+        session.begin(baseDraft: baseDraft)
+    }
+
+    /// The user editing the composer directly while dictation is listening.
+    mutating func userTypes(_ text: String) {
+        currentDraft = text
+    }
+
+    /// One recognition event, wired like the controller's `applyDraftUpdate(for:)`.
+    mutating func recognize(_ transcript: String) {
+        if let composedDraft = session.composedDraft(for: transcript, currentDraft: currentDraft) {
+            spy.updateDraft(composedDraft)
+            currentDraft = composedDraft
+        }
+    }
 }

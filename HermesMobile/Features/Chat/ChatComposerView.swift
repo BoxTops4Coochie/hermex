@@ -1231,9 +1231,13 @@ struct MessageComposerView: View {
         voiceInput.providerPreference = ComposerSTTProviderPreference.storedValue(sttProviderPreferenceRawValue)
         voiceInput.locale = .current
         Task {
-            await voiceInput.toggle(currentDraft: draftMessage) { newDraft in
-                draftMessage = newDraft
-            }
+            await voiceInput.toggle(
+                currentDraft: draftMessage,
+                updateDraft: { newDraft in
+                    draftMessage = newDraft
+                },
+                currentDraftProvider: { draftMessage }
+            )
         }
     }
 
