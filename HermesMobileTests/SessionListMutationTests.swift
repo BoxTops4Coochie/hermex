@@ -1947,6 +1947,73 @@ final class SessionListMutationTests: XCTestCase {
         XCTAssertFalse(viewModel.isUnarchiving)
     }
 
+    /// `load()` has three overlapping entry points (`.task`, `.refreshable`,
+    /// "Try Again"). When two loads race and their responses land out of order,
+    /// the older response must be discarded: it may not overwrite newer rows —
+    /// resurrecting one the user just unarchived — and it may not surface a
+    /// stale failure through `lastError`/`errorMessage`, which the view forwards
+    /// to the app-wide 401 handler.
+    @MainActor
+    func testArchivedSessionStaleOverlappingLoadDoesNotOverwriteNewerResponse() async throws {
+        let firstRequestArrived = expectation(description: "stale request arrived")
+        let secondRequestArrived = expectation(description: "fresh request arrived")
+        let requests = DeferredArchivedSessionsRequests()
+
+        DeferredArchivedSessionsMockURLProtocol.onRequest = { pendingRequest in
+            switch requests.append(pendingRequest) {
+            case 1: firstRequestArrived.fulfill()
+            case 2: secondRequestArrived.fulfill()
+            default: XCTFail("unexpected extra archived sessions request")
+            }
+        }
+        defer { DeferredArchivedSessionsMockURLProtocol.onRequest = nil }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DeferredArchivedSessionsMockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let server = try XCTUnwrap(URL(string: "https://example.test"))
+        let client = APIClient(baseURL: server, session: session)
+        let viewModel = ArchivedSessionsViewModel(server: server, client: client)
+
+        let staleLoad = Task { await viewModel.load() }
+        await fulfillment(of: [firstRequestArrived], timeout: 5)
+
+        // A newer load starts while the first request is still in flight …
+        let freshLoad = Task { await viewModel.load() }
+        await fulfillment(of: [secondRequestArrived], timeout: 5)
+
+        // … and its response lands first.
+        requests.request(at: 1).complete(withJSON: """
+        {
+          "sessions": [
+            { "session_id": "fresh-archived", "title": "Fresh", "archived": true }
+          ]
+        }
+        """)
+        await freshLoad.value
+        XCTAssertEqual(viewModel.sessions.compactMap(\.sessionId), ["fresh-archived"])
+        XCTAssertFalse(viewModel.isLoading)
+
+        // The stale response lands afterwards — it must be discarded.
+        requests.request(at: 0).complete(withJSON: """
+        {
+          "sessions": [
+            { "session_id": "stale-archived", "title": "Stale", "archived": true }
+          ]
+        }
+        """)
+        await staleLoad.value
+
+        XCTAssertEqual(
+            viewModel.sessions.compactMap(\.sessionId),
+            ["fresh-archived"],
+            "a stale response must not overwrite newer data"
+        )
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(viewModel.lastError)
+    }
+
     @MainActor
     func testLoadStoresArchivedCountFromResponseForArchivedEntry() async throws {
         let viewModel = try makeViewModel { request in
@@ -3367,5 +3434,67 @@ private final class LockedSessionMutationRequestCounts {
         defer { lock.unlock() }
 
         return (loadRequestCount, pinMutationRequestCount)
+    }
+}
+
+/// URLProtocol whose responses are completed manually by the test, so two
+/// in-flight requests can be answered out of order (the shared
+/// `MockURLProtocol` answers synchronously inside `startLoading`, which
+/// serializes responses in request order).
+private final class DeferredArchivedSessionsMockURLProtocol: URLProtocol {
+    /// Called (on a URLSession worker thread) whenever a request starts loading.
+    static var onRequest: ((DeferredArchivedSessionsMockURLProtocol) -> Void)?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let onRequest = Self.onRequest else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        onRequest(self)
+    }
+
+    override func stopLoading() {}
+
+    func complete(withJSON json: String) {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(json.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+/// Thread-safe collector for the deferred requests above (`onRequest` fires on
+/// URLSession worker threads).
+private final class DeferredArchivedSessionsRequests: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending: [DeferredArchivedSessionsMockURLProtocol] = []
+
+    /// Appends the request and returns its 1-based arrival order.
+    func append(_ request: DeferredArchivedSessionsMockURLProtocol) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        pending.append(request)
+        return pending.count
+    }
+
+    func request(at index: Int) -> DeferredArchivedSessionsMockURLProtocol {
+        lock.lock()
+        defer { lock.unlock() }
+        return pending[index]
     }
 }

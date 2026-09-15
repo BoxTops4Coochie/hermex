@@ -15,6 +15,15 @@ final class ArchivedSessionsViewModel {
 
     private let client: APIClient
 
+    /// Monotonic token identifying the most recent `load()` call. `load()` has
+    /// three overlapping entry points (`.task`, `.refreshable`, "Try Again"), so
+    /// an older in-flight request must not overwrite a newer response — it would
+    /// otherwise resurrect a row the user just unarchived — or forward a stale
+    /// failure to the app-wide 401 handler through `lastError`. Cancellation
+    /// only filters the error path; it does not stop an older response from
+    /// landing after a newer one.
+    private var loadGeneration = 0
+
     var isUnarchiving: Bool {
         !unarchivingSessionIDs.isEmpty
     }
@@ -24,6 +33,9 @@ final class ArchivedSessionsViewModel {
     }
 
     func load() async {
+        loadGeneration += 1
+        let generation = loadGeneration
+
         isLoading = true
         errorMessage = nil
         actionErrorMessage = nil
@@ -36,18 +48,22 @@ final class ArchivedSessionsViewModel {
             // row carries an `archived` flag (verified against upstream routes.py
             // @312d3fab and the live server), so filter client-side.
             let response = try await client.sessions(includeArchived: true)
+            guard generation == loadGeneration else { return }
             sessions = (response.sessions ?? []).filter {
                 Self.nonEmpty($0.sessionId) != nil && $0.archived == true
             }
         } catch {
-            // A cancelled load (pull-to-refresh superseding `.task`, or the view
-            // disappearing) is not a failure — don't flash an error state.
+            // A cancelled load (the view disappearing) is not a failure — don't
+            // flash an error state.
+            guard generation == loadGeneration else { return }
             if !Self.isCancellationError(error) {
                 lastError = error
                 errorMessage = error.localizedDescription
             }
         }
 
+        // A newer load owns the loading state now — leave it alone.
+        guard generation == loadGeneration else { return }
         isLoading = false
     }
 
