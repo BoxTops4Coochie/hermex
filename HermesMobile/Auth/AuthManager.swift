@@ -504,8 +504,15 @@ final class AuthManager {
         if let scoped = try? keychain.load(.customHeaders, scope: scope) {
             stored = scoped
         } else if let legacy = try? keychain.load(.customHeaders) {
-            try? keychain.save(legacy, forKey: .customHeaders, scope: scope)
-            try? keychain.delete(.customHeaders)
+            do {
+                try keychain.save(legacy, forKey: .customHeaders, scope: scope)
+                try? keychain.delete(.customHeaders)
+            } catch {
+                // A failed scoped write must not destroy the only copy of the
+                // user's headers (#16): keep the legacy blob so the migration
+                // retries on the next launch, and still hydrate this launch
+                // from it below.
+            }
             stored = legacy
         } else {
             stored = nil

@@ -355,10 +355,53 @@ final class CustomHeaderSSEInjectionTests: XCTestCase {
 
 // MARK: - AuthManager configure / lifecycle
 
+/// A `KeychainStoring` that wraps a non-throwing `InMemoryKeychainStore` and can
+/// be told to fail the *scoped* `save(_:forKey:scope:)` only — mimicking a
+/// Keychain write failing at exactly the wrong moment (locked keychain,
+/// transient securityd error) — so tests can exercise mutations like the legacy
+/// header migration against a failing write, not just the happy path (#16).
+final class ScopedSaveFailureKeychainStore: KeychainStoring {
+    /// When `true`, the scoped `save(_:forKey:scope:)` throws instead of writing;
+    /// every other call keeps delegating to the wrapped store.
+    var failsScopedSave = false
+    /// The wrapped store, exposed so tests can assert on what was (or wasn't) written.
+    let inner = InMemoryKeychainStore()
+
+    /// Stands in for a real Keychain write failure (locked keychain, transient securityd error).
+    struct KeychainSaveError: Error {}
+
+    func save(_ value: String, forKey key: KeychainStore.Key) throws {
+        try inner.save(value, forKey: key)
+    }
+
+    func load(_ key: KeychainStore.Key) throws -> String? {
+        try inner.load(key)
+    }
+
+    func delete(_ key: KeychainStore.Key) throws {
+        try inner.delete(key)
+    }
+
+    func save(_ value: String, forKey key: KeychainStore.Key, scope: String) throws {
+        if failsScopedSave {
+            throw KeychainSaveError()
+        }
+        try inner.save(value, forKey: key, scope: scope)
+    }
+
+    func load(_ key: KeychainStore.Key, scope: String) throws -> String? {
+        try inner.load(key, scope: scope)
+    }
+
+    func delete(_ key: KeychainStore.Key, scope: String) throws {
+        try inner.delete(key, scope: scope)
+    }
+}
+
 @MainActor
 final class CustomHeaderAuthManagerTests: XCTestCase {
     private func makeManager(
-        keychain: InMemoryKeychainStore,
+        keychain: any KeychainStoring,
         store: CustomHeaderStore,
         client: MockAuthAPIClient
     ) -> AuthManager {
@@ -599,6 +642,33 @@ final class CustomHeaderAuthManagerTests: XCTestCase {
         XCTAssertEqual(store.snapshot().map(\.value), ["Bearer saved"])
         XCTAssertNotNil(keychain.scopedValue(.customHeaders, scope: "https://legacy.test"))
         XCTAssertNil(keychain.savedValues[.customHeaders])
+    }
+
+    /// A failed scoped Keychain write during the legacy-header migration must not
+    /// destroy the only copy of the user's headers: the global blob survives so
+    /// the migration retries on the next launch, and this launch still hydrates
+    /// from it (#16).
+    func testMigrationSurvivesScopedSaveFailure() throws {
+        let keychain = ScopedSaveFailureKeychainStore()
+        keychain.failsScopedSave = true
+        let encoded = try XCTUnwrap([CustomHeader(name: "Authorization", value: "Bearer saved")].encodedForStorage())
+        // Pre-#16 state: one global header blob alongside the single saved server.
+        try keychain.save(encoded, forKey: .customHeaders)
+        try keychain.save("https://legacy.test", forKey: .serverURL)
+        let store = CustomHeaderStore()
+
+        _ = makeManager(
+            keychain: keychain,
+            store: store,
+            client: MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: false))
+        )
+
+        // Hydration still succeeded from the legacy value this launch…
+        XCTAssertEqual(store.snapshot().map(\.value), ["Bearer saved"])
+        // …and the global blob survived the failed scoped write, so the migration
+        // can retry on the next launch instead of silently dropping the headers.
+        XCTAssertNotNil(keychain.inner.savedValues[.customHeaders])
+        XCTAssertNil(keychain.inner.scopedValue(.customHeaders, scope: "https://legacy.test"))
     }
 }
 
