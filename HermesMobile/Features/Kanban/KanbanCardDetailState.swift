@@ -40,6 +40,9 @@ final class KanbanCardDetailState {
 
     private(set) var loadState: KanbanCardDetailLoadState = .idle
     private(set) var detail: KanbanCardDetailEnvelope?
+    // Set when a background refetch fails while loaded data is on screen; the
+    // view keeps showing that data under the stale banner until a refetch succeeds.
+    private(set) var detailRefetchFailed = false
     private(set) var commentSubmission: KanbanCommentSubmissionState = .idle
     private(set) var workerLogState: KanbanWorkerLogState = .idle
     var commentDraft = ""
@@ -184,6 +187,7 @@ final class KanbanCardDetailState {
             guard !Task.isCancelled, activeDetailLoadID == loadID, activeMutationID == nil else { return }
             detail = response
             loadState = .loaded
+            detailRefetchFailed = false
             onDetailLoaded(response)
         } catch {
             guard activeDetailLoadID == loadID, activeMutationID == nil else { return }
@@ -191,6 +195,8 @@ final class KanbanCardDetailState {
             forwardAuthentication(error)
             if isNotFound(error) {
                 await reconcileMissingEntity(loadID: loadID)
+            } else if !showsLoadingState, detail != nil {
+                detailRefetchFailed = true
             } else {
                 loadState = .failed
             }
@@ -210,6 +216,7 @@ final class KanbanCardDetailState {
             guard !Task.isCancelled, activeMutationID == expectedMutationID else { return }
             detail = response
             loadState = .loaded
+            detailRefetchFailed = false
             onDetailLoaded(response)
             if attempt.appears(in: response.comments ?? []) {
                 commentDraft = ""
