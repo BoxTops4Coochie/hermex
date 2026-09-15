@@ -67,12 +67,18 @@ final class SkillsViewModel {
 
         do {
             _ = try await client.toggleSkill(name: name, enabled: enabled)
-            await load()
         } catch {
+            // Roll back only when the toggle call itself fails. After a successful
+            // toggle the optimistic row already matches the server, so a failed
+            // reload must keep it instead of flipping the row the wrong way;
+            // load() surfaces its own errors.
             updateSkill(named: name, disabled: enabled)
             lastError = error
             errorMessage = error.localizedDescription
+            return
         }
+
+        await load()
     }
 
     static func groupedSkills(for skills: [SkillSummary]) -> [(category: String, skills: [SkillSummary])] {

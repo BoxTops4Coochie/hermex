@@ -77,4 +77,41 @@ final class SkillsViewModelTests: APIClientTestCase {
         XCTAssertEqual(model.skills.first?.disabled, false)
         XCTAssertNotNil(model.lastError)
     }
+
+    @MainActor
+    func testToggleSkillKeepsOptimisticRowWhenReloadFails() async throws {
+        var skillsLoadCount = 0
+        let client = makeClient { request in
+            switch request.url?.path {
+            case "/api/skills":
+                skillsLoadCount += 1
+                if skillsLoadCount == 1 {
+                    return apiTestJSONResponse("""
+                    {"skills": [{"name": "swift-refactor", "category": "coding", "disabled": true}]}
+                    """, for: request)
+                }
+                throw URLError(.notConnectedToInternet)
+            case "/api/skills/toggle":
+                let body = try apiTestJSONBody(from: request)
+                XCTAssertEqual(body["name"] as? String, "swift-refactor")
+                XCTAssertEqual(body["enabled"] as? Bool, true)
+                return apiTestJSONResponse("""
+                {"ok": true, "name": "swift-refactor", "enabled": true}
+                """, for: request)
+            default:
+                XCTFail("Unexpected path: \(request.url?.path ?? "nil")")
+                return apiTestJSONResponse("{}", for: request)
+            }
+        }
+        let model = SkillsViewModel(client: client)
+
+        await model.load()
+        await model.setSkill(try XCTUnwrap(model.skills.first), enabled: true)
+
+        // The toggle succeeded, so the optimistic row matches the server and the
+        // failed reload must not roll it back; the reload error is what surfaces.
+        XCTAssertEqual(model.skills.first?.disabled, false)
+        XCTAssertNotNil(model.lastError)
+        XCTAssertNotNil(model.errorMessage)
+    }
 }
