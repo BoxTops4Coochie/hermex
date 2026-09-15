@@ -340,6 +340,7 @@ struct MessageBubbleView: View {
                             attachment: item.attachment,
                             localData: item.localData,
                             loadAttachmentImage: loadAttachmentImage,
+                            cacheNamespace: transcriptMediaCacheNamespace,
                             onPreviewAttachment: onPreviewAttachment,
                             size: cellSize
                         )
@@ -460,6 +461,9 @@ private struct GridAttachmentCell: View {
     let attachment: MessageAttachment
     let localData: Data?
     let loadAttachmentImage: ((String) async -> Data?)?
+    /// Namespaces the remote image cache per server and session; see
+    /// `RemoteAttachmentImage`.
+    let cacheNamespace: String
     let onPreviewAttachment: ((MessageAttachment, Data?) -> Void)?
     let size: CGFloat
 
@@ -519,6 +523,7 @@ private struct GridAttachmentCell: View {
             } else if let path = resolvedPath, let loadAttachmentImage {
                 RemoteAttachmentImage(
                     path: path,
+                    cacheNamespace: cacheNamespace,
                     loadAttachmentImage: loadAttachmentImage
                 )
                 .frame(width: size, height: size)
@@ -649,9 +654,21 @@ private struct GridAttachmentCell: View {
 /// cookie. Deduplicates concurrent requests and caches in memory.
 private struct RemoteAttachmentImage: View {
     let path: String
+    /// Namespaces the cache entry per server and session — the same
+    /// `transcriptMediaCacheNamespace` string ("server|session") the bubble
+    /// already carries — so a same-named attachment can never be served
+    /// another server's or session's image after a switch.
+    let cacheNamespace: String
     let loadAttachmentImage: (String) async -> Data?
     @State private var image: UIImage?
     @State private var didAttempt = false
+
+    /// Includes the namespace so a server or session switch re-runs the load
+    /// even when the path is unchanged, moving the cell off the other
+    /// context's cached entry and onto its own.
+    private var cacheKey: String {
+        AttachmentImageCacheKey.make(namespace: cacheNamespace, path: path)
+    }
 
     var body: some View {
         ZStack {
@@ -665,9 +682,10 @@ private struct RemoteAttachmentImage: View {
                 fallbackImage
             }
         }
-        .task(id: path) {
+        .task(id: cacheKey) {
             let loaded = await AttachmentImageCache.shared.image(
                 for: path,
+                cacheNamespace: cacheNamespace,
                 loadAttachmentImage: loadAttachmentImage
             )
             guard !Task.isCancelled else { return }
@@ -698,9 +716,27 @@ private struct RemoteAttachmentImage: View {
     }
 }
 
+/// Pure cache-key builder for `AttachmentImageCache`, mirroring the
+/// transcript media namespace (`transcriptMediaCacheNamespace` in ChatView,
+/// `"server|session"` — the active server URL joined with the server-side
+/// session ID, falling back to `local:<SwiftData ID>` for sessions that have
+/// no server ID yet). A key is `"namespace|path"`, so entries never cross a
+/// server or session boundary.
+///
+/// Fallback: a bubble built without a namespace (`""`) degrades to the bare
+/// path — the pre-namespacing key — so context-free callers keep working.
+enum AttachmentImageCacheKey {
+    static func make(namespace: String, path: String) -> String {
+        namespace.isEmpty ? path : "\(namespace)|\(path)"
+    }
+}
+
 /// In-memory image cache that delegates loading to the authenticated client.
-/// Deduplicates concurrent requests for the same path.
-private actor AttachmentImageCache {
+/// Deduplicates concurrent requests and caches in memory. Entries are
+/// namespaced per server and session (see `AttachmentImageCacheKey`): the
+/// loader resolves bytes through whichever server is active at call time, so
+/// the key must carry that context or a switch can serve the wrong image.
+actor AttachmentImageCache {
     static let shared = AttachmentImageCache()
 
     private var cache: [String: UIImage] = [:]
@@ -708,13 +744,16 @@ private actor AttachmentImageCache {
 
     func image(
         for path: String,
+        cacheNamespace: String,
         loadAttachmentImage: @escaping (String) async -> Data?
     ) async -> UIImage? {
-        if let cached = cache[path] {
+        let key = AttachmentImageCacheKey.make(namespace: cacheNamespace, path: path)
+
+        if let cached = cache[key] {
             return cached
         }
 
-        if let task = inFlight[path] {
+        if let task = inFlight[key] {
             return await task.value
         }
 
@@ -729,12 +768,12 @@ private actor AttachmentImageCache {
             return UIImage(data: previewData)
         }
 
-        inFlight[path] = task
+        inFlight[key] = task
         let image = await task.value
-        inFlight[path] = nil
+        inFlight[key] = nil
 
         if let image {
-            cache[path] = image
+            cache[key] = image
         }
         return image
     }
