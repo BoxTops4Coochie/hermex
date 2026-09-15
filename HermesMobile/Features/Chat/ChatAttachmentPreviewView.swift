@@ -316,6 +316,7 @@ struct ChatAttachmentImageLightbox: View {
             if let image = UIImage(data: file.data) {
                 return .image(
                     image,
+                    identity: item.displayPath,
                     detail: ByteCountFormatter.string(
                         fromByteCount: Int64(file.originalByteCount),
                         countStyle: .file
