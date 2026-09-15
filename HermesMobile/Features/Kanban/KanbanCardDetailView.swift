@@ -110,7 +110,7 @@ private struct KanbanCardDetailContent: View {
 
     private var detailList: some View {
         List {
-            if featureModel.isOffline || featureModel.loadedDetailIsStale {
+            if featureModel.isOffline || featureModel.loadedDetailIsStale || state.detailRefetchFailed {
                 Label("Offline—showing previously loaded data", systemImage: "wifi.slash")
                     .foregroundStyle(.orange)
                     .accessibilityLabel(Text("Offline—showing previously loaded data"))

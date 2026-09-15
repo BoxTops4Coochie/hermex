@@ -188,6 +188,93 @@ final class KanbanCardDetailStateTests: XCTestCase {
         XCTAssertEqual(missingBoard.loadState, .missingBoard)
     }
 
+    func testFailedBackgroundRefetchKeepsLoadedDetailAndSurfacesStaleness() async {
+        let serverError = APIError.http(statusCode: 500, body: nil)
+
+        let refreshClient = CardDetailClient(details: [.success(.baseline), .failure(serverError)])
+        let refreshed = makeState(client: refreshClient)
+        await refreshed.load()
+        await refreshed.refresh()
+
+        XCTAssertEqual(refreshed.loadState, .loaded)
+        XCTAssertEqual(refreshed.detail?.card?.status?.rawValue, "ready")
+        XCTAssertTrue(refreshed.detailRefetchFailed)
+
+        let reconcileClient = CardDetailClient(details: [.success(.baseline), .failure(serverError)])
+        let reconciled = makeState(client: reconcileClient)
+        await reconciled.load()
+        await reconciled.reconcile(revision: 1)
+
+        XCTAssertEqual(reconciled.loadState, .loaded)
+        XCTAssertEqual(reconciled.detail?.card?.status?.rawValue, "ready")
+        XCTAssertTrue(reconciled.detailRefetchFailed)
+    }
+
+    func testSuccessfulRefetchAfterFailureClearsStalenessAndAppliesFreshDetail() async {
+        let client = CardDetailClient(details: [
+            .success(.baseline),
+            .failure(APIError.http(statusCode: 500, body: nil)),
+            .success(.done)
+        ])
+        let state = makeState(client: client)
+
+        await state.load()
+        await state.refresh()
+        XCTAssertTrue(state.detailRefetchFailed)
+
+        await state.refresh()
+
+        XCTAssertEqual(state.loadState, .loaded)
+        XCTAssertFalse(state.detailRefetchFailed)
+        XCTAssertEqual(state.detail?.card?.status?.rawValue, "done")
+    }
+
+    func testFirstFetchFailureStillFailsWithoutStalenessFlag() async {
+        let client = CardDetailClient(details: [.failure(APIError.http(statusCode: 500, body: nil))])
+        let state = makeState(client: client)
+
+        await state.load()
+
+        XCTAssertEqual(state.loadState, .failed)
+        XCTAssertNil(state.detail)
+        XCTAssertFalse(state.detailRefetchFailed)
+    }
+
+    func testBackgroundRefetchNotFoundStillReconcilesMissingEntity() async {
+        let client = CardDetailClient(
+            details: [.success(.baseline), .failure(APIError.http(statusCode: 404, body: nil))],
+            boards: .main
+        )
+        let state = makeState(client: client)
+
+        await state.load()
+        await state.refresh()
+
+        XCTAssertEqual(state.loadState, .missingCard)
+        XCTAssertNil(state.detail)
+        XCTAssertFalse(state.detailRefetchFailed)
+        let boardCalls = await client.boardCallCount
+        XCTAssertEqual(boardCalls, 1)
+    }
+
+    func testFailedPostCommentRefetchKeepsLoadedDetailAndSurfacesStaleness() async {
+        let client = CardDetailClient(
+            details: [.success(.baseline), .failure(APIError.http(statusCode: 500, body: nil))],
+            commentResult: .success(.accepted)
+        )
+        let state = makeState(client: client)
+
+        await state.load()
+        state.commentDraft = "Ready for review"
+        await state.submitComment(allowsMutation: true)
+
+        XCTAssertEqual(state.commentSubmission, .succeeded)
+        XCTAssertEqual(state.loadState, .loaded)
+        XCTAssertEqual(state.detail?.card?.status?.rawValue, "ready")
+        XCTAssertTrue((state.detail?.comments ?? []).isEmpty)
+        XCTAssertTrue(state.detailRefetchFailed)
+    }
+
     func testWorkerLogDistinguishesAbsentTruncatedAndFailed() async {
         let absentClient = CardDetailClient(logResult: .success(.absent))
         let absent = makeState(client: absentClient)
