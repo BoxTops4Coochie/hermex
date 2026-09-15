@@ -307,6 +307,76 @@ final class CliSessionsSyncModelTests: APIClientTestCase {
         )
     }
 
+    // MARK: - Adopt vs in-flight write race
+
+    @MainActor
+    func testAdoptDuringInFlightWriteSupersedesItsFailureRevert() async {
+        // A toggle write is held in flight; while it is pending the settings
+        // load adopts the opposite server value; the held write then fails.
+        // The stale failure must neither revert the adopted value nor surface
+        // an error: the adopt invalidates the in-flight write's generation.
+        var releaseWrite: CheckedContinuation<Void, Never>?
+        let model = makeModel(
+            server: serverA,
+            writeToServer: { _ in
+                await withCheckedContinuation { releaseWrite = $0 }
+                throw URLError(.badServerResponse)
+            }
+        )
+        model.adopt(serverValue: false)
+
+        model.setShowsCliSessions(true) // write held in flight below
+        while releaseWrite == nil { await Task.yield() }
+
+        model.adopt(serverValue: true) // opposite of the pre-toggle value
+
+        releaseWrite?.resume() // the held write fails with a 5xx
+        await model.pendingWrite?.value
+
+        XCTAssertTrue(
+            model.showsCliSessions,
+            "The stale failure must not revert the freshly adopted value"
+        )
+        XCTAssertNil(model.syncErrorMessage)
+        XCTAssertTrue(model.serverSyncsCliSessions)
+        XCTAssertEqual(
+            defaults.object(forKey: SessionRowDisplaySettings.showCliSessionsKey(for: serverA)) as? Bool,
+            true
+        )
+    }
+
+    @MainActor
+    func testClaudeCodeAdoptDuringInFlightWriteSupersedesItsFailureRevert() async {
+        var releaseWrite: CheckedContinuation<Void, Never>?
+        let model = makeModel(
+            server: serverA,
+            writeClaudeCodeToServer: { _ in
+                await withCheckedContinuation { releaseWrite = $0 }
+                throw URLError(.badServerResponse)
+            }
+        )
+        model.adoptClaudeCode(serverValue: false)
+
+        model.setShowsClaudeCodeSessions(true) // write held in flight below
+        while releaseWrite == nil { await Task.yield() }
+
+        model.adoptClaudeCode(serverValue: true) // opposite of the pre-toggle value
+
+        releaseWrite?.resume() // the held write fails with a 5xx
+        await model.pendingClaudeCodeWrite?.value
+
+        XCTAssertTrue(
+            model.showsClaudeCodeSessions,
+            "The stale failure must not revert the freshly adopted value"
+        )
+        XCTAssertNil(model.claudeCodeSyncErrorMessage)
+        XCTAssertTrue(model.serverSyncsClaudeCodeSessions)
+        XCTAssertEqual(
+            defaults.object(forKey: SessionRowDisplaySettings.showClaudeCodeSessionsKey(for: serverA)) as? Bool,
+            true
+        )
+    }
+
     // MARK: - Per-server isolation
 
     @MainActor

@@ -59,6 +59,10 @@ final class CliSessionsSyncModel {
     /// the key) leaves the local toggle exactly as it was and disables
     /// write-back. Adoption never writes back to the server.
     func adopt(serverValue: Bool?) {
+        // The adopt re-syncs the toggle from the server, so any write task
+        // started before it is stale: on failure it must not revert the
+        // freshly adopted value, hence the generation bump.
+        writeGeneration += 1
         guard let serverValue else {
             serverSyncsCliSessions = false
             return
@@ -72,6 +76,8 @@ final class CliSessionsSyncModel {
     /// Mirrors `adopt(serverValue:)` for the subordinate Claude Code setting.
     /// Older servers omit the key, retaining the shown-by-default local value.
     func adoptClaudeCode(serverValue: Bool?) {
+        // Mirrors the generation bump in `adopt(serverValue:)`.
+        claudeCodeWriteGeneration += 1
         guard let serverValue else {
             serverSyncsClaudeCodeSessions = false
             return
