@@ -302,6 +302,197 @@ final class ClarificationTests: XCTestCase {
         XCTAssertEqual(viewModel.activeStreamID, "stream-123")
     }
 
+    /// The server answers HTTP 200 with `{"ok": false}` for protective
+    /// refusals and expired prompts (same shape as approvals), so the card
+    /// must stay and the user must be told instead of reading a refusal as
+    /// success while the agent stays blocked.
+    @MainActor
+    func testClarificationRespondRejectedWithOkFalseKeepsTheCardAndExplains() async throws {
+        let streamClient = ClarificationSpySSEStreamingClient()
+        let approvalStreamClient = ClarificationSpySSEStreamingClient()
+        let clarifyStreamClient = ClarificationSpySSEStreamingClient()
+        let viewModel = try makeViewModel(
+            streamClient: streamClient,
+            approvalStreamClient: approvalStreamClient,
+            clarifyStreamClient: clarifyStreamClient
+        ) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return jsonResponse(#"{"session_id": "session-abc", "stream_id": "stream-123"}"#, for: request)
+            case "/api/clarify/respond":
+                // 200, not an error status — that is the whole trap.
+                return jsonResponse(#"{"ok": false, "response": "Use main"}"#, for: request)
+            case "/api/clarify/pending":
+                return jsonResponse(
+                    #"{"pending": {"clarify_id": "clarify-1", "question": "Which branch?", "session_id": "session-abc"}, "pending_count": 1}"#,
+                    for: request
+                )
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        let didStart = await viewModel.sendMessage("Continue")
+        XCTAssertTrue(didStart)
+        clarifyStreamClient.emit(.clarificationPending(ClarificationPendingResponse(
+            pending: PendingClarification(
+                clarifyId: "clarify-1",
+                question: "Which branch?",
+                sessionId: "session-abc"
+            ),
+            pendingCount: 1
+        )))
+
+        let didRespond = await viewModel.respondToClarification("Use main")
+
+        XCTAssertFalse(didRespond, "A refusal is not a success.")
+        XCTAssertEqual(viewModel.clarificationPrompt?.pending.clarifyId, "clarify-1", "The agent is still waiting, so the card stays.")
+        XCTAssertNotNil(viewModel.clarificationErrorMessage, "Silence here is what made this untraceable.")
+        XCTAssertEqual(viewModel.activeStreamID, "stream-123")
+    }
+
+    /// A response without `ok: true` is not proof the server accepted the
+    /// answer, so the pending card must remain actionable.
+    @MainActor
+    func testClarificationRespondWithoutAnOkFieldKeepsTheCardAndExplains() async throws {
+        let streamClient = ClarificationSpySSEStreamingClient()
+        let approvalStreamClient = ClarificationSpySSEStreamingClient()
+        let clarifyStreamClient = ClarificationSpySSEStreamingClient()
+        let viewModel = try makeViewModel(
+            streamClient: streamClient,
+            approvalStreamClient: approvalStreamClient,
+            clarifyStreamClient: clarifyStreamClient
+        ) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return jsonResponse(#"{"session_id": "session-abc", "stream_id": "stream-123"}"#, for: request)
+            case "/api/clarify/respond":
+                return jsonResponse(#"{"response": "Use main"}"#, for: request)
+            case "/api/clarify/pending":
+                return jsonResponse(
+                    #"{"pending": {"clarify_id": "clarify-1", "question": "Which branch?", "session_id": "session-abc"}, "pending_count": 1}"#,
+                    for: request
+                )
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        let didStart = await viewModel.sendMessage("Continue")
+        XCTAssertTrue(didStart)
+        clarifyStreamClient.emit(.clarificationPending(ClarificationPendingResponse(
+            pending: PendingClarification(
+                clarifyId: "clarify-1",
+                question: "Which branch?",
+                sessionId: "session-abc"
+            ),
+            pendingCount: 1
+        )))
+
+        let didRespond = await viewModel.respondToClarification("Use main")
+
+        XCTAssertFalse(didRespond)
+        XCTAssertEqual(viewModel.clarificationPrompt?.pending.clarifyId, "clarify-1")
+        XCTAssertNotNil(viewModel.clarificationErrorMessage)
+    }
+
+    /// Upstream approvals pair a stale click with `stale_cleared: true`: the
+    /// prompt already resolved server-side, so this card is finished even
+    /// without a fresh `ok: true`. Either explicit success signal may clear it.
+    @MainActor
+    func testClarificationRespondStaleClearedClearsTheCardAndSucceeds() async throws {
+        let streamClient = ClarificationSpySSEStreamingClient()
+        let approvalStreamClient = ClarificationSpySSEStreamingClient()
+        let clarifyStreamClient = ClarificationSpySSEStreamingClient()
+        var didFetchPendingAfterResponse = false
+        let viewModel = try makeViewModel(
+            streamClient: streamClient,
+            approvalStreamClient: approvalStreamClient,
+            clarifyStreamClient: clarifyStreamClient
+        ) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return jsonResponse(#"{"session_id": "session-abc", "stream_id": "stream-123"}"#, for: request)
+            case "/api/clarify/respond":
+                return jsonResponse(#"{"ok": false, "response": "Use main", "stale_cleared": true}"#, for: request)
+            case "/api/clarify/pending":
+                didFetchPendingAfterResponse = true
+                return jsonResponse(#"{"pending": null}"#, for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        let didStart = await viewModel.sendMessage("Continue")
+        XCTAssertTrue(didStart)
+        clarifyStreamClient.emit(.clarificationPending(ClarificationPendingResponse(
+            pending: PendingClarification(
+                clarifyId: "clarify-1",
+                question: "Which branch?",
+                sessionId: "session-abc"
+            ),
+            pendingCount: 1
+        )))
+
+        let didRespond = await viewModel.respondToClarification("Use main")
+
+        XCTAssertTrue(didRespond)
+        XCTAssertNil(viewModel.clarificationPrompt)
+        XCTAssertNil(viewModel.clarificationErrorMessage)
+        XCTAssertTrue(didFetchPendingAfterResponse)
+        XCTAssertEqual(viewModel.activeStreamID, "stream-123")
+    }
+
+    /// The explicit-success contract in one place: `ok: true` clears the card
+    /// and reports success.
+    @MainActor
+    func testClarificationRespondWithOkTrueClearsTheCardAndSucceeds() async throws {
+        let streamClient = ClarificationSpySSEStreamingClient()
+        let approvalStreamClient = ClarificationSpySSEStreamingClient()
+        let clarifyStreamClient = ClarificationSpySSEStreamingClient()
+        var didFetchPendingAfterResponse = false
+        let viewModel = try makeViewModel(
+            streamClient: streamClient,
+            approvalStreamClient: approvalStreamClient,
+            clarifyStreamClient: clarifyStreamClient
+        ) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return jsonResponse(#"{"session_id": "session-abc", "stream_id": "stream-123"}"#, for: request)
+            case "/api/clarify/respond":
+                return jsonResponse(#"{"ok": true, "response": "Use main"}"#, for: request)
+            case "/api/clarify/pending":
+                didFetchPendingAfterResponse = true
+                return jsonResponse(#"{"pending": null}"#, for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        let didStart = await viewModel.sendMessage("Continue")
+        XCTAssertTrue(didStart)
+        clarifyStreamClient.emit(.clarificationPending(ClarificationPendingResponse(
+            pending: PendingClarification(
+                clarifyId: "clarify-1",
+                question: "Which branch?",
+                sessionId: "session-abc"
+            ),
+            pendingCount: 1
+        )))
+
+        let didRespond = await viewModel.respondToClarification("Use main")
+
+        XCTAssertTrue(didRespond)
+        XCTAssertNil(viewModel.clarificationPrompt)
+        XCTAssertNil(viewModel.clarificationErrorMessage)
+        XCTAssertTrue(didFetchPendingAfterResponse)
+        XCTAssertEqual(viewModel.activeStreamID, "stream-123")
+    }
+
     @MainActor
     func testClarificationResponseFailureKeepsPromptAndPublishesActionError() async throws {
         let streamClient = ClarificationSpySSEStreamingClient()
