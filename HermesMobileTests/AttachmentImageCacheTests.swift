@@ -141,21 +141,30 @@ final class AttachmentImageCacheTests: XCTestCase {
         )
         let loader: @Sendable (String) async -> Data? = { _ in await spy.load() }
 
-        let first = try XCTUnwrap(
-            await cache.image(for: "report.png", cacheNamespace: Self.serverASessionA, loadAttachmentImage: loader)
+        let firstImage = await cache.image(
+            for: "report.png",
+            cacheNamespace: Self.serverASessionA,
+            loadAttachmentImage: loader
         )
-        let second = try XCTUnwrap(
-            await cache.image(for: "report.png", cacheNamespace: Self.serverASessionB, loadAttachmentImage: loader)
+        let first = try XCTUnwrap(firstImage)
+        let secondImage = await cache.image(
+            for: "report.png",
+            cacheNamespace: Self.serverASessionB,
+            loadAttachmentImage: loader
         )
+        let second = try XCTUnwrap(secondImage)
 
         XCTAssertEqual(spy.calls, 2)
         XCTAssertEqual(first.size.width, 4)
         XCTAssertEqual(second.size.width, 8)
 
         // A repeat inside the same namespace is a cache hit: no new load.
-        let repeated = try XCTUnwrap(
-            await cache.image(for: "report.png", cacheNamespace: Self.serverASessionA, loadAttachmentImage: loader)
+        let repeatedImage = await cache.image(
+            for: "report.png",
+            cacheNamespace: Self.serverASessionA,
+            loadAttachmentImage: loader
         )
+        let repeated = try XCTUnwrap(repeatedImage)
         XCTAssertEqual(spy.calls, 2)
         XCTAssertEqual(repeated.size.width, 4)
     }
@@ -180,8 +189,10 @@ final class AttachmentImageCacheTests: XCTestCase {
             loadAttachmentImage: loader
         )
 
-        let firstImage = try XCTUnwrap(await first)
-        let secondImage = try XCTUnwrap(await second)
+        let firstResult = await first
+        let firstImage = try XCTUnwrap(firstResult)
+        let secondResult = await second
+        let secondImage = try XCTUnwrap(secondResult)
 
         // Both requests resolved from a single load, whichever entered the
         // actor first.
@@ -214,13 +225,12 @@ final class AttachmentImageCacheTests: XCTestCase {
         // (and is now held by the gate) before starting the second request.
         await spy.waitForCallCount(1)
 
-        let otherNamespace = try XCTUnwrap(
-            await cache.image(
-                for: "report.png",
-                cacheNamespace: Self.serverASessionB,
-                loadAttachmentImage: loader
-            )
+        let otherNamespaceImage = await cache.image(
+            for: "report.png",
+            cacheNamespace: Self.serverASessionB,
+            loadAttachmentImage: loader
         )
+        let otherNamespace = try XCTUnwrap(otherNamespaceImage)
 
         // The second request completed on its own loader while the first was
         // still held, and got its own image.
@@ -228,7 +238,8 @@ final class AttachmentImageCacheTests: XCTestCase {
         XCTAssertEqual(otherNamespace.size.width, 8)
 
         spy.openGate()
-        let heldNamespace = try XCTUnwrap(await heldTask.value)
+        let heldTaskImage = await heldTask.value
+        let heldNamespace = try XCTUnwrap(heldTaskImage)
         XCTAssertEqual(heldNamespace.size.width, 4)
         XCTAssertEqual(spy.calls, 2)
     }
