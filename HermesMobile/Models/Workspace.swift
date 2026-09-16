@@ -86,7 +86,11 @@ struct DirectoryListResponse: Decodable, Equatable {
 }
 
 struct WorkspaceEntry: Decodable, Hashable, Identifiable {
-    var id: String { path ?? name ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server keys directory
+    /// rows by path; `name` only disambiguates rows that decode without one.
+    var id: String { "entry|\(path ?? "")|\(name ?? "")" }
     var isBrowsableDirectory: Bool {
         isDirectory == true || type == "dir"
     }

@@ -108,7 +108,11 @@ struct CommandsResponse: Decodable, Equatable {
 }
 
 struct AgentCommand: Decodable, Equatable, Identifiable, Sendable {
-    var id: String { name ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server's command
+    /// registry keys rows by name.
+    var id: String { "command|\(name ?? "")" }
 
     let name: String?
     let description: String?
@@ -550,7 +554,11 @@ extension PersonalitiesResponse {
 }
 
 struct PersonalitySummary: Decodable, Equatable, Hashable, Identifiable {
-    var id: String { name ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server keys
+    /// personalities by name.
+    var id: String { "personality|\(name ?? "")" }
 
     let name: String?
     let description: String?
@@ -610,7 +618,11 @@ struct ProfileSwitchResponse: Decodable, Equatable {
 }
 
 struct ProfileSummary: Decodable, Equatable, Hashable, Identifiable, Sendable {
-    var id: String { name ?? path ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. Upstream keys profiles by
+    /// name; `path` only disambiguates rows that decode without one.
+    var id: String { "profile|\(name ?? "")|\(path ?? "")" }
 
     let name: String?
     let path: String?

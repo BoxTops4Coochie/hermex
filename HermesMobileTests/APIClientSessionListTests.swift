@@ -271,4 +271,29 @@ final class APIClientSessionListTests: APIClientTestCase {
             "A numeric id is coerced rather than dropped."
         )
     }
+
+    /// `ProjectSummary.id` is content-derived: the same payload must decode to
+    /// the same identity twice (a fresh-UUID fallback would hand SwiftUI a new
+    /// one on every read and rebuild the list on every poll), and distinct
+    /// rows must not share an identity.
+    func testProjectIDsAreStableAcrossDecodesAndDistinctPerRow() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let json = Data("""
+        {"projects": [
+          {"project_id": "proj123", "name": "Hermes", "color": "#123456"},
+          {"name": "Nameless id"},
+          {}
+        ]}
+        """.utf8)
+
+        let first = try decoder.decode(ProjectsResponse.self, from: json)
+        let second = try decoder.decode(ProjectsResponse.self, from: json)
+
+        XCTAssertEqual(
+            (first.projects ?? []).map(\.id),
+            ["project|proj123|Hermes", "project||Nameless id", "project||"]
+        )
+        XCTAssertEqual((first.projects ?? []).map(\.id), (second.projects ?? []).map(\.id))
+    }
 }

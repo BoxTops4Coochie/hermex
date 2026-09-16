@@ -150,6 +150,40 @@ final class APIClientCronEndpointTests: APIClientTestCase {
         XCTAssertEqual(response.outputs?.last?.content, "")
     }
 
+    /// `CronOutputItem.id` is content-derived: the same payload must fetch to
+    /// the same identity twice (a fresh-UUID fallback would hand SwiftUI a new
+    /// one on every read and rebuild the list on every poll), and distinct
+    /// rows must not share an identity.
+    func testCronOutputIDsAreStableAcrossFetchesAndDistinctPerRow() async throws {
+        let payload = """
+        {
+          "job_id": "job123",
+          "outputs": [
+            {"filename": "2026-05-04_10-00-00.md", "content": "All clear."},
+            {"filename": "2026-05-04_09-00-00.md", "content": ""},
+            {"content": "No filename"}
+          ]
+        }
+        """
+
+        let first = try await fetchCronOutput(payload)
+        let second = try await fetchCronOutput(payload)
+
+        XCTAssertEqual(
+            (first.outputs ?? []).map(\.id),
+            ["cron-output|2026-05-04_10-00-00.md", "cron-output|2026-05-04_09-00-00.md", "cron-output|"]
+        )
+        XCTAssertEqual((first.outputs ?? []).map(\.id), (second.outputs ?? []).map(\.id))
+    }
+
+    private func fetchCronOutput(_ json: String) async throws -> CronOutputResponse {
+        let client = makeClient { request in
+            apiTestJSONResponse(json, for: request)
+        }
+
+        return try await client.cronOutput(jobID: "job123", limit: 5)
+    }
+
     func testCronCreateBuildsExpectedBodyAndDecodesMutationResponse() async throws {
         let client = makeClient { request in
             XCTAssertEqual(request.url?.path, "/api/crons/create")

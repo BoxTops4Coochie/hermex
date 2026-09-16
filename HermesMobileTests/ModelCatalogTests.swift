@@ -585,4 +585,25 @@ final class PersonalityAutocompleteTests: XCTestCase {
 
         XCTAssertEqual(response.slashAutocompleteNames, ["none", "mentor", "critic"])
     }
+
+    /// `PersonalitySummary.id` is content-derived: the same payload must
+    /// decode to the same identity twice (a fresh-UUID fallback would hand
+    /// SwiftUI a new one on every read and rebuild the list on every poll),
+    /// and distinct rows must not share an identity.
+    func testPersonalityIDsAreStableAcrossDecodesAndDistinctPerRow() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let json = Data("""
+        {"personalities": [
+          {"name": "mentor", "description": "Patient technical coach"},
+          {"description": "No name"}
+        ]}
+        """.utf8)
+
+        let first = try decoder.decode(PersonalitiesResponse.self, from: json)
+        let second = try decoder.decode(PersonalitiesResponse.self, from: json)
+
+        XCTAssertEqual((first.personalities ?? []).map(\.id), ["personality|mentor", "personality|"])
+        XCTAssertEqual((first.personalities ?? []).map(\.id), (second.personalities ?? []).map(\.id))
+    }
 }

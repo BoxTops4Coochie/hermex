@@ -5,8 +5,12 @@ struct SkillsResponse: Decodable, Equatable {
 }
 
 struct SkillSummary: Decodable, Equatable, Identifiable {
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server keys skills by
+    /// name; `path` only disambiguates rows that decode without one.
     var id: String {
-        name ?? UUID().uuidString
+        "skill|\(name ?? "")|\(path ?? "")"
     }
 
     let name: String?

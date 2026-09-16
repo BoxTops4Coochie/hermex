@@ -226,7 +226,11 @@ struct CronOutputResponse: Decodable, Equatable {
 }
 
 struct CronOutputItem: Decodable, Equatable, Identifiable {
-    var id: String { filename ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server keys run
+    /// outputs by filename.
+    var id: String { "cron-output|\(filename ?? "")" }
 
     let filename: String?
     let content: String?
@@ -261,7 +265,12 @@ struct CronDeliveryOptionsResponse: Decodable, Equatable {
 }
 
 struct CronDeliveryOption: Decodable, Equatable, Identifiable {
-    var id: String { value ?? label ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server keys delivery
+    /// platforms by value; `label` only disambiguates rows that decode
+    /// without one.
+    var id: String { "cron-delivery|\(value ?? "")|\(label ?? "")" }
 
     let value: String?
     let label: String?

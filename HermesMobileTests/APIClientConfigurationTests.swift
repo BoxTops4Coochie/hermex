@@ -526,6 +526,31 @@ final class APIClientConfigurationTests: APIClientTestCase {
         XCTAssertNil(response.singleProfileMode)
     }
 
+    /// `ProfileSummary.id` is content-derived: the same payload must decode to
+    /// the same identity twice (a fresh-UUID fallback would hand SwiftUI a new
+    /// one on every read and rebuild the list on every poll), and distinct
+    /// rows must not share an identity.
+    func testProfileIDsAreStableAcrossDecodesAndDistinctPerRow() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let json = Data("""
+        {"profiles": [
+          {"name": "work", "path": "/profiles/work", "is_default": true},
+          {"path": "/profiles/nameless"},
+          {}
+        ]}
+        """.utf8)
+
+        let first = try decoder.decode(ProfilesResponse.self, from: json)
+        let second = try decoder.decode(ProfilesResponse.self, from: json)
+
+        XCTAssertEqual(
+            (first.profiles ?? []).map(\.id),
+            ["profile|work|/profiles/work", "profile||/profiles/nameless", "profile||"]
+        )
+        XCTAssertEqual((first.profiles ?? []).map(\.id), (second.profiles ?? []).map(\.id))
+    }
+
     func testProfilesResponseEffectiveDefaultPrefersActiveName() {
         let response = ProfilesResponse(
             profiles: [

@@ -52,6 +52,40 @@ final class APIClientSkillEndpointTests: APIClientTestCase {
         XCTAssertNil(response.skills?[0].relatedSkills)
     }
 
+    /// `SkillSummary.id` is content-derived: the same payload must decode to
+    /// the same identity twice (a fresh-UUID fallback would hand SwiftUI a new
+    /// one on every read and rebuild the list on every poll), and distinct
+    /// rows must not share an identity.
+    func testSkillIDsAreStableAcrossDecodesAndDistinctPerRow() async throws {
+        let payload = """
+        {
+          "skills": [
+            {"name": "swift-refactor", "path": "/skills/coding/swift-refactor"},
+            {"name": "doc-search", "category": "research"},
+            {"path": "/skills/orphan"},
+            {}
+          ]
+        }
+        """
+
+        let first = try await decodeSkills(from: payload)
+        let second = try await decodeSkills(from: payload)
+
+        XCTAssertEqual(
+            (first.skills ?? []).map(\.id),
+            ["skill|swift-refactor|/skills/coding/swift-refactor", "skill|doc-search|", "skill||/skills/orphan", "skill||"]
+        )
+        XCTAssertEqual((first.skills ?? []).map(\.id), (second.skills ?? []).map(\.id))
+    }
+
+    private func decodeSkills(from json: String) async throws -> SkillsResponse {
+        let client = makeClient { request in
+            apiTestJSONResponse(json, for: request)
+        }
+
+        return try await client.skills()
+    }
+
     func testToggleSkillPostsExpectedBodyAndDecodesResponse() async throws {
         let client = makeClient { request in
             XCTAssertEqual(request.url?.path, "/api/skills/toggle")

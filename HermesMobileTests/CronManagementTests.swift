@@ -130,6 +130,30 @@ final class CronManagementModelTests: XCTestCase {
         XCTAssertFalse(knownValue.contains(where: \.isCustom))
     }
 
+    /// `CronDeliveryOption.id` is content-derived: the same payload must
+    /// decode to the same identity twice (a fresh-UUID fallback would hand
+    /// SwiftUI a new one on every read and rebuild the list on every poll),
+    /// and distinct rows must not share an identity.
+    func testDeliveryOptionIDsAreStableAcrossDecodesAndDistinctPerRow() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let json = Data("""
+        {"platforms": [
+          {"value": "local", "label": "Local (save output only)"},
+          {"label": "No value"}
+        ]}
+        """.utf8)
+
+        let first = try decoder.decode(CronDeliveryOptionsResponse.self, from: json)
+        let second = try decoder.decode(CronDeliveryOptionsResponse.self, from: json)
+
+        XCTAssertEqual(
+            (first.platforms ?? []).map(\.id),
+            ["cron-delivery|local|Local (save output only)", "cron-delivery||No value"]
+        )
+        XCTAssertEqual((first.platforms ?? []).map(\.id), (second.platforms ?? []).map(\.id))
+    }
+
     func testCronDeliverPickerPreservesInitialAndLiveCustomValues() throws {
         let serverOptions = [
             CronDeliveryOption(value: "local", label: "Local"),
