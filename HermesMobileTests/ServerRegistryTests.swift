@@ -74,6 +74,30 @@ final class ServerRegistryTests: XCTestCase {
         XCTAssertEqual(reader.activeServer?.id, "https://example.test")
     }
 
+    /// A failed Keychain write-through is captured in `lastPersistenceError`
+    /// instead of being swallowed: reads still come from the in-memory snapshot,
+    /// so without the capture the divergence from what a relaunch would restore
+    /// would be invisible.
+    func testKeychainWriteFailureIsCapturedAndClearedOnLaterSuccess() throws {
+        let keychain = ScopedSaveFailureKeychainStore()
+        keychain.failsUnscopedSave = true
+        let registry = ServerRegistry(keychain: keychain, identityDefaults: .ephemeral())
+
+        registry.activate(url: try url("https://example.test"))
+
+        // The in-memory snapshot still reflects the mutation…
+        XCTAssertEqual(registry.servers.map(\.id), ["https://example.test"])
+        XCTAssertNil(keychain.savedValues[.servers])
+        // …and the failed write-through is captured, not vanished.
+        XCTAssertTrue(registry.lastPersistenceError is ScopedSaveFailureKeychainStore.KeychainSaveError)
+
+        // A later successful write-through clears the captured failure.
+        keychain.failsUnscopedSave = false
+        registry.activate(url: try url("https://other.test"))
+        XCTAssertNotNil(keychain.savedValues[.servers])
+        XCTAssertNil(registry.lastPersistenceError)
+    }
+
     func testActivatingTheAlreadyActiveServerDoesNotRewriteTheKeychain() throws {
         let keychain = InMemoryKeychainStore()
         let registry = makeRegistry(keychain: keychain)

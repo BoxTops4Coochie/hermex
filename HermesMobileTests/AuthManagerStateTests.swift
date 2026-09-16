@@ -202,6 +202,8 @@ final class AuthManagerStateTests: XCTestCase {
         let manager = AuthManager(
             keychain: keychain,
             clientFactory: { _ in client },
+            // configure probes through this factory when headers are passed.
+            probeClientFactory: { _, _ in client },
             headerStore: CustomHeaderStore(),
             serverRegistry: registry
         )

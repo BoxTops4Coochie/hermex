@@ -114,6 +114,11 @@ final class ServerRegistry: @unchecked Sendable {
     private let identityDefaults: UserDefaults
     private let now: () -> Date
     private let storage: OSAllocatedUnfairLock<Snapshot>
+    /// Captures the most recent Keychain write-through failure (cleared when a
+    /// write succeeds). Guarded by its own lock so reads never take the storage
+    /// lock; `persist` writes it while holding the storage lock, and nothing
+    /// takes the storage lock while holding this one.
+    private let lastPersistenceErrorBox = OSAllocatedUnfairLock<Error?>(initialState: nil)
 
     init(
         keychain: any KeychainStoring = KeychainStore(),
@@ -345,15 +350,37 @@ final class ServerRegistry: @unchecked Sendable {
 
     // MARK: - Persistence
 
-    /// Writes the snapshot through to the Keychain. Called under the storage lock.
+    /// The failure (encode or Keychain write) captured by the most recent
+    /// `persist` attempt, or nil when it succeeded. The registry serves all
+    /// reads from the in-memory snapshot, so a failed write-through silently
+    /// diverges memory from what a relaunch would restore — captured here
+    /// instead of being swallowed because the class has no error-reporting
+    /// channel (no delegate or hook); nothing surfaces it to the user, it
+    /// exists so the failure is observable rather than invisible.
+    var lastPersistenceError: Error? {
+        lastPersistenceErrorBox.withLock { $0 }
+    }
+
+    /// Writes the snapshot through to the Keychain. Called under the storage
+    /// lock, so it reports failures through `lastPersistenceError` instead of
+    /// throwing.
     private func persist(_ snapshot: Snapshot) {
-        guard
-            let data = try? JSONEncoder().encode(snapshot),
-            let json = String(data: data, encoding: .utf8)
-        else {
-            return
+        do {
+            let data = try JSONEncoder().encode(snapshot)
+            guard let json = String(data: data, encoding: .utf8) else {
+                // JSONEncoder output is UTF-8 by construction; kept explicit so
+                // even this theoretical failure is captured, not skipped.
+                throw PersistenceError.snapshotNotUTF8Encodable
+            }
+            try keychain.save(json, forKey: .servers)
+            lastPersistenceErrorBox.withLock { $0 = nil }
+        } catch {
+            lastPersistenceErrorBox.withLock { $0 = error }
         }
-        try? keychain.save(json, forKey: .servers)
+    }
+
+    private enum PersistenceError: Error {
+        case snapshotNotUTF8Encodable
     }
 
     private static func loadSnapshot(from keychain: any KeychainStoring) -> Snapshot {

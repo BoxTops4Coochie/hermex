@@ -107,6 +107,9 @@ final class KanbanCardDetailStateTests: XCTestCase {
         XCTAssertEqual(uncertain.commentSubmission, .succeeded)
     }
 
+    /// A cancelled comment submission restores `.failed` (mirroring
+    /// performStatusMutation) so the composer is recoverable, and spawns no
+    /// outcome or missing-entity reads on behalf of the cancelled attempt.
     func testCancelledCommentDoesNotSpawnOutcomeOrMissingEntityReads() async {
         let client = CardDetailClient(
             details: [.success(.baseline)],
@@ -118,11 +121,49 @@ final class KanbanCardDetailStateTests: XCTestCase {
 
         await state.submitComment(allowsMutation: true)
 
-        XCTAssertEqual(state.commentSubmission, .submitting)
+        XCTAssertEqual(state.commentSubmission, .failed)
         let detailCalls = await client.detailCallCount
         let boardCalls = await client.boardCallCount
         XCTAssertEqual(detailCalls, 1)
         XCTAssertEqual(boardCalls, 0)
+
+        // Not wedged in `.submitting`: a retry goes back out (and lands in the
+        // same recoverable `.failed` because this stub keeps cancelling).
+        await state.submitComment(allowsMutation: true)
+        let retryCalls = await client.commentCallCount
+        let detailCallsAfterRetry = await client.detailCallCount
+        let boardCallsAfterRetry = await client.boardCallCount
+        XCTAssertEqual(retryCalls, 2)
+        XCTAssertEqual(state.commentSubmission, .failed)
+        XCTAssertEqual(detailCallsAfterRetry, detailCalls)
+        XCTAssertEqual(boardCallsAfterRetry, boardCalls)
+    }
+
+    /// Cancelling the *outcome check* (a non-definitive write failure sent the
+    /// composer to `.checkingResult`, then the refetch was cancelled) leaves the
+    /// result genuinely unknown: restore `.outcomeUncertain` so refresh() routes
+    /// back through the check instead of wedging `.checkingResult` forever.
+    func testCancelledOutcomeCheckRestoresRecoverableUncertainty() async {
+        let cancelled = APIError.network(underlying: URLError(.cancelled))
+        let client = CardDetailClient(
+            details: [
+                .success(.baseline),
+                .failure(cancelled),
+                .success(.withComment)
+            ],
+            commentResult: .failure(APIError.http(statusCode: 500, body: nil))
+        )
+        let state = makeState(client: client)
+        await state.load()
+        state.commentDraft = "Ready for review"
+
+        await state.submitComment(allowsMutation: true)
+        XCTAssertEqual(state.commentSubmission, .outcomeUncertain)
+        XCTAssertEqual(state.commentDraft, "Ready for review")
+
+        await state.refresh()
+        XCTAssertEqual(state.commentSubmission, .succeeded)
+        XCTAssertEqual(state.commentDraft, "")
     }
 
     func testLiveReconciliationKeepsDetailOpenAndAppliesRemoteStatus() async {

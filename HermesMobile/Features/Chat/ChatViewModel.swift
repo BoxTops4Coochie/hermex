@@ -1391,6 +1391,26 @@ final class ChatViewModel {
         await attachmentCoordinator.transcriptMediaData(for: reference)
     }
 
+    /// Mirrors `ArchivedSessionsViewModel.isCancellationError`: a raw
+    /// `CancellationError` or a (possibly `APIError.network`-wrapped)
+    /// `URLError.cancelled` — APIClient wraps every URLSession error, so the
+    /// wrapped shape is what a cancelled load actually arrives as.
+    private static func isCancellationError(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let underlying: Error
+        if case APIError.network(let wrapped) = error {
+            underlying = wrapped
+        } else {
+            underlying = error
+        }
+
+        guard let urlError = underlying as? URLError else { return false }
+        return urlError.code == .cancelled
+    }
+
     func loadMessages(modelContext: ModelContext? = nil) async {
         guard let sessionID else {
             errorMessage = String(localized: "The server did not provide a session ID.")
@@ -1523,6 +1543,24 @@ final class ChatViewModel {
                 )
             )
         } catch {
+            // A cancelled reload (the coordinator tears down the in-flight load
+            // when a newer one supersedes it) is not a failure: keep the
+            // transcript exactly as it was, restore a cache-first placeholder if
+            // one is still showing, and surface nothing — the same deliberate
+            // exclusion CacheFallbackPolicy applies to `.cancelled`. State flips
+            // or a "cancelled" errorMessage here would flash a failure for work
+            // that was superseded, not broken.
+            if Self.isCancellationError(error) {
+                if renderedCacheFirst {
+                    revertCacheFirstPlaceholder(
+                        cacheFirstPlaceholder,
+                        to: previousMessages,
+                        previousMessagesOffset: previousMessagesOffset
+                    )
+                }
+                return
+            }
+
             lastError = error
             latestServerLoadHadAssistantResponseAfterLatestUser = false
             if CacheFallbackPolicy.shouldUseCache(for: error), let modelContext {

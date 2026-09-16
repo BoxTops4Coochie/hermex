@@ -91,4 +91,22 @@ final class APIClientTranscribeTests: APIClientTestCase {
         let response = try await client.transcribeAudio(data: Data("x".utf8), filename: "v.m4a")
         XCTAssertEqual(response.transcript, "hi")
     }
+
+    /// Same error contract as `sendData`/`uploadFile`: a URLSession failure
+    /// surfaces as `APIError.network`, not a raw `URLError` — callers matching
+    /// that case must see transcribe failures too.
+    func testTranscribeAudioWrapsNetworkFailureInAPIError() async {
+        let client = makeClient { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        do {
+            _ = try await client.transcribeAudio(data: Data("x".utf8), filename: "v.m4a")
+            XCTFail("Expected APIError.network")
+        } catch {
+            guard case APIError.network = error else {
+                return XCTFail("Expected APIError.network, got \(error)")
+            }
+        }
+    }
 }

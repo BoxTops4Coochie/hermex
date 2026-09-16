@@ -50,6 +50,24 @@ final class ProvidersViewModelTests: APIClientTestCase {
         XCTAssertFalse(model.isLoading)
     }
 
+    /// A cancelled load is not a failure. APIClient wraps the URLSession
+    /// cancellation in `APIError.network`, so the filter must unwrap it — the
+    /// old bare `URLError` filter let "cancelled" leak into `errorMessage`.
+    @MainActor
+    func testCancelledLoadSurfacesNothingAndClearsLoading() async {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/api/providers")
+            throw URLError(.cancelled)
+        }
+        let model = ProvidersViewModel(server: Self.serverURL, client: client)
+
+        await model.load()
+
+        XCTAssertNil(model.errorMessage)
+        XCTAssertTrue(model.providers.isEmpty)
+        XCTAssertFalse(model.isLoading)
+    }
+
     /// A failed pull-to-refresh must keep the cached providers *and* surface the
     /// error — the view shows a refresh-failure banner above the stale rows.
     @MainActor

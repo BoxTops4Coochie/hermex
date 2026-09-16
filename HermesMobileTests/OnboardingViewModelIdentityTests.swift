@@ -445,6 +445,9 @@ extension OnboardingViewModelIdentityTests {
         AuthManager(
             keychain: keychain,
             clientFactory: { _ in client },
+            // testConnection/configure probe through this factory whenever the
+            // view model passes its (possibly empty) headers array.
+            probeClientFactory: { _, _ in client },
             serverRegistry: ServerRegistry.inMemory()
         )
     }

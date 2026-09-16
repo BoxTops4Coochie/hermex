@@ -24,7 +24,16 @@ extension APIClient {
         body.appendMultipartClosingBoundary(boundary)
         request.httpBody = body
 
-        let (responseData, response) = try await session.data(for: request)
+        // Same error contract as `sendData`/`uploadFile`: every URLSession
+        // failure is wrapped in `APIError.network` so callers matching that
+        // case see transcribe failures too, not just raw `URLError`s.
+        let responseData: Data
+        let response: URLResponse
+        do {
+            (responseData, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(underlying: error)
+        }
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.http(statusCode: -1, body: nil)
         }
