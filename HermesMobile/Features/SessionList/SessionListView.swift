@@ -1308,8 +1308,12 @@ struct SessionListView: View {
         let sessionToOpen = await viewModel.sessionForOpening(session, modelContext: modelContext)
         guard !Task.isCancelled else { return }
 
+        // Consumed like PendingNewChatView.createSessionIfNeeded: both this alert
+        // and SessionActionConfirmations bind to actionErrorMessage, so leaving it
+        // set presents the same failure as two competing alerts.
         if let message = viewModel.actionErrorMessage {
             sessionOpenErrorMessage = message
+            viewModel.clearActionError()
         }
 
         if let sessionToOpen {
