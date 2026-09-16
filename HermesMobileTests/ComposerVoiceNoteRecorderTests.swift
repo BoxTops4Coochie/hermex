@@ -38,6 +38,113 @@ final class ComposerVoiceNoteRecorderTests: XCTestCase {
         XCTAssertTrue(ComposerVoiceNoteGesture.isCancelArmed(dragTranslationHeight: -200))
     }
 
+    func testScheduledRecordingStartIsAbandonedOnceTheTouchIsUp() {
+        // A system-cancelled touch never calls onEnded, so the @GestureState
+        // reset to not-touching is the only end signal; a clean lift resets
+        // too, but onEnded owns that path and the cancel is idempotent.
+        XCTAssertFalse(ComposerVoiceNoteGesture.shouldCancelScheduledRecordingStart(isTouchDown: true))
+        XCTAssertTrue(ComposerVoiceNoteGesture.shouldCancelScheduledRecordingStart(isTouchDown: false))
+    }
+
+    // MARK: - Interruption
+
+    /// Recorder double: the real `AVAudioRecorder` stops reporting
+    /// `isRecording` when the system tears the capture down mid-recording.
+    private final class FakeVoiceNoteRecording: VoiceNoteRecording {
+        var isRecording = true
+        var currentTime: TimeInterval = 0
+        private(set) var didStop = false
+
+        func prepareToRecord() -> Bool { true }
+        func record() -> Bool { true }
+
+        func stop() {
+            didStop = true
+            isRecording = false
+        }
+    }
+
+    /// Audio-session double so tests never drive the live shared session.
+    private final class SpyVoiceNoteAudioSession {
+        private(set) var activationCount = 0
+        private(set) var deactivationCount = 0
+
+        func activate() { activationCount += 1 }
+        func deactivate() { deactivationCount += 1 }
+    }
+
+    @MainActor
+    private func makeRecordingRecorder(
+        _ fake: FakeVoiceNoteRecording,
+        session: SpyVoiceNoteAudioSession
+    ) -> ComposerVoiceNoteRecorder {
+        ComposerVoiceNoteRecorder(
+            recorderFactory: { _ in fake },
+            permissionRequester: { true },
+            activateAudioSession: { session.activate() },
+            deactivateAudioSession: { session.deactivate() }
+        )
+    }
+
+    @MainActor
+    func testInterruptionDetectedOnlyWhenRecordingStateLostItsRecorderActivity() {
+        XCTAssertTrue(ComposerVoiceNoteRecorder.interruptionDetected(currentState: .recording, isRecording: false))
+        XCTAssertFalse(ComposerVoiceNoteRecorder.interruptionDetected(currentState: .recording, isRecording: true))
+        // Non-recording states never count as an interruption.
+        XCTAssertFalse(ComposerVoiceNoteRecorder.interruptionDetected(currentState: .idle, isRecording: false))
+        XCTAssertFalse(ComposerVoiceNoteRecorder.interruptionDetected(currentState: .requestingPermission, isRecording: false))
+    }
+
+    @MainActor
+    func testInterruptionMidRecordingFinishesStateAndStopsTicker() async {
+        let fake = FakeVoiceNoteRecording()
+        let session = SpyVoiceNoteAudioSession()
+        let recorder = makeRecordingRecorder(fake, session: session)
+
+        await recorder.begin()
+
+        XCTAssertEqual(recorder.state, .recording)
+        XCTAssertTrue(recorder.isTickerActive)
+        XCTAssertTrue(ComposerAudioCaptureState.shared.isCapturing)
+
+        // Audio-session interruption: the recorder object stays but reports
+        // it is no longer recording. The next tick finalizes through the
+        // normal teardown path instead of freezing in `.recording`.
+        fake.isRecording = false
+        recorder.tick()
+
+        XCTAssertEqual(recorder.state, .idle)
+        XCTAssertEqual(recorder.elapsed, 0)
+        XCTAssertFalse(recorder.isTickerActive)
+        XCTAssertEqual(session.deactivationCount, 1)
+        XCTAssertFalse(ComposerAudioCaptureState.shared.isCapturing)
+        // An already-interrupted recorder is not stopped a second time.
+        XCTAssertFalse(fake.didStop)
+
+        // Later ticks (the timer is gone) cannot resurrect state or move elapsed.
+        fake.isRecording = true
+        fake.currentTime = 42
+        recorder.tick()
+
+        XCTAssertEqual(recorder.state, .idle)
+        XCTAssertEqual(recorder.elapsed, 0)
+    }
+
+    @MainActor
+    func testTickAdvancesElapsedOnlyWhileRecording() async {
+        let fake = FakeVoiceNoteRecording()
+        fake.currentTime = 3.5
+        let session = SpyVoiceNoteAudioSession()
+        let recorder = makeRecordingRecorder(fake, session: session)
+
+        await recorder.begin()
+        recorder.tick()
+
+        XCTAssertEqual(recorder.elapsed, 3.5)
+        XCTAssertEqual(recorder.state, .recording)
+        XCTAssertEqual(session.deactivationCount, 0)
+    }
+
     // MARK: - Policy
 
     func testMaximumDurationStaysWellUnderUploadCap() {

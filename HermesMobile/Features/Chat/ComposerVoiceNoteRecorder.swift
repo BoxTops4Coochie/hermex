@@ -9,6 +9,9 @@ import OSLog
 /// holds one of these as `@State`: hold the mic to `begin()`, release to `finish()`,
 /// slide up to `cancel()`. Drives an elapsed-time ticker and flips the shared
 /// `ComposerAudioCaptureState` so the inline audio player won't fight for the session.
+/// If the system tears the capture down mid-recording (audio-session interruption:
+/// incoming call, Siri), the ticker notices and ends the recording through the
+/// normal teardown path instead of leaving the state stuck in `.recording`.
 @MainActor
 @Observable
 final class ComposerVoiceNoteRecorder {
@@ -34,28 +37,45 @@ final class ComposerVoiceNoteRecorder {
     private(set) var elapsed: TimeInterval = 0
     private(set) var errorMessage: String?
 
-    @ObservationIgnored private var recorder: AVAudioRecorder?
+    @ObservationIgnored private var recorder: (any VoiceNoteRecording)?
     @ObservationIgnored private var fileURL: URL?
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var didActivateSession = false
-    @ObservationIgnored private let recorderFactory: (URL) throws -> AVAudioRecorder
+    @ObservationIgnored private let recorderFactory: (URL) throws -> any VoiceNoteRecording
     @ObservationIgnored private let permissionRequester: () async -> Bool
+    @ObservationIgnored private let activateAudioSession: () throws -> Void
+    @ObservationIgnored private let deactivateAudioSession: () -> Void
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "HermesMobile",
         category: "VoiceNote"
     )
 
     init(
-        recorderFactory: @escaping (URL) throws -> AVAudioRecorder = { try AVAudioRecorder(url: $0, settings: ComposerVoiceNoteRecorder.recordingSettings) },
-        permissionRequester: @escaping () async -> Bool = { await ComposerVoiceMicrophonePermissionRequester.request() }
+        recorderFactory: @escaping (URL) throws -> any VoiceNoteRecording = {
+            try SystemVoiceNoteRecording(recorder: AVAudioRecorder(url: $0, settings: ComposerVoiceNoteRecorder.recordingSettings))
+        },
+        permissionRequester: @escaping () async -> Bool = { await ComposerVoiceMicrophonePermissionRequester.request() },
+        activateAudioSession: @escaping () throws -> Void = {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth])
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        },
+        deactivateAudioSession: @escaping () -> Void = {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     ) {
         self.recorderFactory = recorderFactory
         self.permissionRequester = permissionRequester
+        self.activateAudioSession = activateAudioSession
+        self.deactivateAudioSession = deactivateAudioSession
     }
 
     var isRecording: Bool { state == .recording }
     var isRequestingPermission: Bool { state == .requestingPermission }
     var hasReachedMaximumDuration: Bool { elapsed >= Self.maximumDuration }
+    /// Whether the elapsed ticker is running; lets tests assert the ticker is
+    /// torn down together with the recording.
+    var isTickerActive: Bool { ticker != nil }
 
     static let recordingSettings: [String: Any] = [
         AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -135,9 +155,7 @@ final class ComposerVoiceNoteRecorder {
     // MARK: - Recording internals
 
     private func startRecording() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth])
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
+        try activateAudioSession()
         didActivateSession = true
 
         let url = Self.makeTemporaryFileURL()
@@ -169,7 +187,7 @@ final class ComposerVoiceNoteRecorder {
 
     private func teardownSession() {
         guard didActivateSession else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        deactivateAudioSession()
         didActivateSession = false
     }
 
@@ -196,9 +214,32 @@ final class ComposerVoiceNoteRecorder {
         ticker = timer
     }
 
-    private func tick() {
-        guard let recorder, recorder.isRecording else { return }
+    /// One tick of the 10 Hz elapsed ticker. Internal so tests can drive the
+    /// interruption decision directly instead of waiting on the run loop.
+    func tick() {
+        guard let recorder else { return }
+        if Self.interruptionDetected(currentState: state, isRecording: recorder.isRecording) {
+            // The system stopped the recorder underneath the app (audio-session
+            // interruption: incoming call, Siri — the timer keeps firing and the
+            // recorder state is the truth, which is why this is detected here
+            // rather than via AVAudioSession.interruptionNotification). Route
+            // through the normal teardown so the ticker stops and state returns
+            // to idle instead of freezing in `.recording`, where the
+            // max-duration auto-stop driven by `elapsed` could never fire.
+            cancel()
+            logger.info("Voice note recording interrupted")
+            return
+        }
+        guard state == .recording else { return }
         elapsed = recorder.currentTime
+    }
+
+    /// Pure so the ticker's interruption decision is unit-testable without a
+    /// recorder: an interrupted capture leaves the object in place reporting
+    /// that it is no longer recording while the state machine still says
+    /// `.recording`.
+    static func interruptionDetected(currentState: State, isRecording: Bool) -> Bool {
+        currentState == .recording && !isRecording
     }
 
     private func stopTicker() {
@@ -224,6 +265,34 @@ enum ComposerVoiceNoteRecorderError: LocalizedError {
             return String(localized: "Couldn't start recording. Try again.")
         }
     }
+}
+
+/// Minimal recording surface of `AVAudioRecorder` the state machine needs, so
+/// tests can fake capture state: the real object's `isRecording` flips when
+/// the system tears a recording down mid-capture.
+protocol VoiceNoteRecording: AnyObject {
+    var isRecording: Bool { get }
+    var currentTime: TimeInterval { get }
+    func prepareToRecord() -> Bool
+    func record() -> Bool
+    func stop()
+}
+
+/// The real recorder behind the seam; a distinct type avoids retroactively
+/// conforming an Apple class to a local protocol.
+final class SystemVoiceNoteRecording: VoiceNoteRecording {
+    private let recorder: AVAudioRecorder
+
+    init(recorder: AVAudioRecorder) {
+        self.recorder = recorder
+    }
+
+    var isRecording: Bool { recorder.isRecording }
+    var currentTime: TimeInterval { recorder.currentTime }
+
+    func prepareToRecord() -> Bool { recorder.prepareToRecord() }
+    func record() -> Bool { recorder.record() }
+    func stop() { recorder.stop() }
 }
 
 /// Generates collision-resistant `.m4a` names for recorded voice notes. The
@@ -257,5 +326,17 @@ enum ComposerVoiceNoteGesture {
     /// Sliding down (positive height) never cancels.
     static func isCancelArmed(dragTranslationHeight: CGFloat) -> Bool {
         dragTranslationHeight <= -cancelTranslationThreshold
+    }
+
+    /// A touch the system takes back (Control Center or notification swipe, a
+    /// stolen touch) ends a `DragGesture` without calling `onEnded`, and
+    /// SwiftUI gives the gesture no cancellation callback. The one signal it
+    /// does get is `@GestureState` resetting to its initial value on every
+    /// gesture end, cancelled or not. So: while the touch is still down a
+    /// scheduled recording start stays pending; the moment the gesture state
+    /// reports the touch is up, abandon it. A clean lift also resets the
+    /// state, but `onEnded` already ran or will run and owns the end handling.
+    static func shouldCancelScheduledRecordingStart(isTouchDown: Bool) -> Bool {
+        !isTouchDown
     }
 }
