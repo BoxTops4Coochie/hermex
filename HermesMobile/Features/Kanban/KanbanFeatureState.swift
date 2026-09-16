@@ -377,6 +377,9 @@ final class KanbanFeatureState {
 
     private var activeLoadID: UUID?
     private var activeBoardLoadID: UUID?
+    /// The current Board load's failure, recorded so `selectBoard` can classify
+    /// it the way `load()` classifies the same error. Cleared when a load starts.
+    private var lastBoardRefreshError: Error?
     private var boardsResponse: KanbanBoardsResponse?
     private let client: any KanbanDataClient
     private let streamClient: any KanbanEventStreamingClient
@@ -1055,7 +1058,14 @@ final class KanbanFeatureState {
         capabilityWarnings = []
         state = .compatible
         let succeeded = await refreshBoard(usingCursor: false, refreshSupplementary: true)
-        if succeeded { startLiveUpdatesIfReady() }
+        if succeeded {
+            startLiveUpdatesIfReady()
+        } else if let error = lastBoardRefreshError {
+            // The switched-to Board has no data yet, so a failed fetch must
+            // present the way load() presents the same error, not as an empty
+            // Board beneath the refresh-failed banner.
+            state = Self.classify(error)
+        }
     }
 
     func previewDispatch() async {
@@ -2338,6 +2348,7 @@ final class KanbanFeatureState {
         if !preserveRefreshFailure {
             refreshFailed = false
         }
+        lastBoardRefreshError = nil
         defer {
             if activeBoardLoadID == boardLoadID { isRefreshing = false }
         }
@@ -2380,6 +2391,7 @@ final class KanbanFeatureState {
                 _ = await reconcileBoardCollection()
                 if selectedBoardSlug == nil { return false }
             }
+            lastBoardRefreshError = error
             refreshFailed = true
             markOfflineIfNeeded(error)
             forwardAuthentication(error)

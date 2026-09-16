@@ -316,6 +316,56 @@ final class KanbanFeatureStateTests: XCTestCase {
         XCTAssertEqual(state.allCards.map(\.cardID), ["FUTURE-1"])
     }
 
+    func testBoardSwitchConnectivityFailureClassifiesLikeLoad() async {
+        let client = FailingBoardSwitchClient(
+            switchError: APIError.network(underlying: URLError(.notConnectedToInternet))
+        )
+        let state = KanbanFeatureState(server: URL(string: "https://example.test")!, client: client)
+        await state.load()
+        XCTAssertEqual(state.state, .compatible)
+
+        await state.selectBoard("release")
+
+        XCTAssertEqual(state.state, .networkUnavailable)
+        XCTAssertNil(state.snapshot)
+        XCTAssertEqual(state.selectedBoardSlug, "release")
+    }
+
+    func testBoardSwitchServerErrorClassifiesLikeLoad() async {
+        let switchError = APIError.http(statusCode: 500, body: nil)
+        let client = FailingBoardSwitchClient(switchError: switchError)
+        let state = KanbanFeatureState(server: URL(string: "https://example.test")!, client: client)
+        await state.load()
+        XCTAssertEqual(state.state, .compatible)
+
+        await state.selectBoard("release")
+
+        XCTAssertEqual(state.state, .incompatibleContract)
+        XCTAssertNil(state.snapshot)
+        XCTAssertEqual(state.selectedBoardSlug, "release")
+
+        // The switch must never show a state the handshake would not show for
+        // the same error.
+        let handshake = KanbanFeatureState(
+            server: URL(string: "https://example.test")!,
+            client: KanbanClientStub(boardResult: .failure(switchError))
+        )
+        await handshake.load()
+        XCTAssertEqual(handshake.state, .incompatibleContract)
+    }
+
+    func testBoardSwitchSuccessKeepsCompatibleStateWithLoadedSnapshot() async {
+        let client = KanbanClientStub(boardsResult: .success(KanbanFixtures.multiBoards))
+        let state = KanbanFeatureState(server: URL(string: "https://example.test")!, client: client)
+        await state.load()
+
+        await state.selectBoard("release")
+
+        XCTAssertEqual(state.state, .compatible)
+        XCTAssertNotNil(state.snapshot)
+        XCTAssertEqual(state.selectedBoardSlug, "release")
+    }
+
     func testPullToRefreshPerformsFullReconciliation() async {
         let client = BrowsingClient()
         let state = KanbanFeatureState(server: URL(string: "https://example.test")!, client: client)
@@ -2733,6 +2783,27 @@ private actor DeferredBoardSwitchClient: KanbanDataClient {
         releaseContinuation?.resume(returning: KanbanFixtures.futureSnapshot)
         releaseContinuation = nil
     }
+}
+
+/// Serves the handshake and the first Board read so `load()` succeeds, then
+/// fails every later Board read, as a Board switch's snapshot GET would.
+private actor FailingBoardSwitchClient: KanbanDataClient {
+    private var boardCallCount = 0
+    private let switchError: Error
+
+    init(switchError: Error) {
+        self.switchError = switchError
+    }
+
+    func kanbanConfiguration() -> KanbanConfiguration { KanbanFixtures.configuration }
+    func kanbanBoards() -> KanbanBoardsResponse { KanbanFixtures.multiBoards }
+    func kanbanBoard(_ request: KanbanBoardRequest) throws -> KanbanBoardSnapshot {
+        boardCallCount += 1
+        if boardCallCount == 1 { return KanbanFixtures.snapshot }
+        throw switchError
+    }
+    func kanbanStats(board: String) -> KanbanStats { KanbanFixtures.stats }
+    func kanbanAssignees(board: String) -> KanbanAssigneeHistory { KanbanFixtures.history }
 }
 
 private actor MissingChangedRefreshClient: KanbanDataClient {
