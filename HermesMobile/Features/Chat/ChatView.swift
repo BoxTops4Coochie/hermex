@@ -367,6 +367,9 @@ struct ChatView: View {
     @State private var activeStreamStatusRefreshTask: Task<Void, Never>?
     @State private var initialAttachments: [SharedAttachmentImport]
     @State private var didUploadInitialAttachments = false
+    /// Initial share-import uploads that completed, keyed by index so a
+    /// cancelled staging pass retries only what never uploaded.
+    @State private var uploadedInitialAttachmentIndices: Set<Int> = []
 
     init(
         session: SessionSummary,
@@ -2334,14 +2337,28 @@ struct ChatView: View {
             return
         }
 
-        didUploadInitialAttachments = true
-        for attachment in initialAttachments {
-            await viewModel.uploadAttachment(
+        // The one-shot flag moves to the end of the pass so a pass the
+        // appearance task cancelled mid-loop is retried on the next run,
+        // skipping only uploads that already completed (see
+        // ChatInitialAttachmentUploadPolicy for why completion is keyed by
+        // index rather than filename).
+        for index in ChatInitialAttachmentUploadPolicy.pendingIndices(
+            total: initialAttachments.count,
+            completed: uploadedInitialAttachmentIndices
+        ) {
+            let attachment = initialAttachments[index]
+            let uploaded = await viewModel.uploadAttachment(
                 data: attachment.data,
                 filename: attachment.filename,
                 previewData: previewData(for: attachment)
             )
+            if uploaded != nil {
+                uploadedInitialAttachmentIndices.insert(index)
+            }
+            guard !Task.isCancelled else { return }
         }
+
+        didUploadInitialAttachments = true
     }
 
     private func previewData(for attachment: SharedAttachmentImport) -> Data? {
@@ -2972,6 +2989,21 @@ struct ChatView: View {
         }
 
         return max(0, transcriptMessages.count - 1 - index)
+    }
+}
+
+/// Bookkeeping for `ChatView.uploadInitialAttachmentsIfNeeded`: staging the
+/// share-extension attachments a chat opens with must survive the appearance
+/// task being cancelled mid-pass. Uploads are not idempotent — every attempt
+/// saves a fresh draft copy and stages another pending attachment — so a
+/// retried pass skips only uploads that verifiably completed, keyed by index
+/// because share imports can repeat display names and a filename key would
+/// wrongly skip the second copy mid-pass.
+enum ChatInitialAttachmentUploadPolicy {
+    /// Indices of the staged attachments that still need an upload this pass.
+    static func pendingIndices(total: Int, completed: Set<Int>) -> [Int] {
+        guard total > 0 else { return [] }
+        return (0..<total).filter { !completed.contains($0) }
     }
 }
 

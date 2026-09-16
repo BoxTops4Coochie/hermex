@@ -22,8 +22,10 @@ struct ComposerVoiceStatusView: View {
 /// and sliding up to cancel. Both paths run through a single
 /// `DragGesture(minimumDistance: 0)`: touch-down schedules a `DispatchWorkItem`
 /// after the hold threshold, and a release before it fires cancels the item and
-/// counts as a tap → dictation. See `pressGesture` for why timing beats composing
-/// `LongPressGesture`/`TapGesture`.
+/// counts as a tap → dictation. A touch the system cancels without a release —
+/// `onEnded` never runs — is abandoned through the `@GestureState` reset, so a
+/// cancelled press can't start a recording half a second later. See
+/// `pressGesture` for why timing beats composing `LongPressGesture`/`TapGesture`.
 struct ComposerVoiceControlButton: View {
     let isListening: Bool
     let isDisabled: Bool
@@ -37,6 +39,11 @@ struct ComposerVoiceControlButton: View {
     @State private var isPressing = false
     @State private var didTriggerRecording = false
     @State private var holdWorkItem: DispatchWorkItem?
+    /// Tracks the touch through the gesture. SwiftUI resets `@GestureState` on
+    /// every gesture end — including system-cancelled touches that never call
+    /// `onEnded` (a Control Center or notification swipe, a stolen touch) — so
+    /// the reset is the only cancellation signal this gesture shape gets.
+    @GestureState private var isTouchDown = false
 
     var body: some View {
         Image(systemName: symbolName)
@@ -48,6 +55,15 @@ struct ComposerVoiceControlButton: View {
             .contentShape(Circle())
             .opacity(isDisabled && !isRecordingVoiceNote ? 0.4 : 1)
             .gesture(pressGesture)
+            .onChange(of: isTouchDown) { _, isDown in
+                guard ComposerVoiceNoteGesture.shouldCancelScheduledRecordingStart(isTouchDown: isDown) else { return }
+                abandonScheduledRecordingStart()
+            }
+            .onDisappear {
+                // The button can also leave the hierarchy mid-press with no
+                // gesture end at all.
+                abandonScheduledRecordingStart()
+            }
             .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction {
@@ -80,6 +96,8 @@ struct ComposerVoiceControlButton: View {
     /// never wins). Touch-down schedules a delayed "start recording"; a release
     /// before the delay cancels it and counts as a tap → dictation. A perfectly
     /// still hold still records because the delay is timer-driven, not movement-driven.
+    /// A touch the system cancels without `onEnded` is caught by the `@GestureState`
+    /// reset tracked in `isTouchDown`.
     private var pressGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -91,6 +109,7 @@ struct ComposerVoiceControlButton: View {
                     onRecordingDragChanged(value.translation.height)
                 }
             }
+            .updating($isTouchDown) { _, isDown, _ in isDown = true }
             .onEnded { value in
                 cancelScheduledRecordingStart()
                 let triggered = didTriggerRecording
@@ -121,6 +140,16 @@ struct ComposerVoiceControlButton: View {
     private func cancelScheduledRecordingStart() {
         holdWorkItem?.cancel()
         holdWorkItem = nil
+    }
+
+    /// Runs on the gesture ends `onEnded` never sees: a system-cancelled touch
+    /// (via the `isTouchDown` reset) or the button leaving the hierarchy. Cancels
+    /// the pending hold timer and releases the press so the next touch-down
+    /// re-arms; `onEnded` stays the owner of tap-vs-record end handling, so
+    /// `didTriggerRecording` is deliberately left alone here.
+    private func abandonScheduledRecordingStart() {
+        cancelScheduledRecordingStart()
+        isPressing = false
     }
 }
 

@@ -516,6 +516,23 @@ final class ChatAttachmentCoordinatorTests: APIClientTestCase {
         let filenameEnd = try XCTUnwrap(data[filenameStart...].range(of: quote)).lowerBound
         return String(decoding: data[filenameStart..<filenameEnd], as: UTF8.self)
     }
+
+    // MARK: - Initial share-import upload bookkeeping (ChatView)
+
+    /// `ChatView.uploadInitialAttachmentsIfNeeded` lets a pass cancelled by the
+    /// appearance task retry on the next run, skipping only what completed.
+    /// Uploads are not idempotent by name — every attempt saves a fresh draft
+    /// copy and stages another pending attachment — so completion is keyed by
+    /// index; share imports can repeat display names, and a filename key would
+    /// wrongly skip the second copy mid-pass.
+    func testInitialAttachmentUploadPendingIndicesSkipCompletedAndRetryRest() {
+        XCTAssertEqual(ChatInitialAttachmentUploadPolicy.pendingIndices(total: 0, completed: []), [])
+        XCTAssertEqual(ChatInitialAttachmentUploadPolicy.pendingIndices(total: 3, completed: []), [0, 1, 2])
+        XCTAssertEqual(ChatInitialAttachmentUploadPolicy.pendingIndices(total: 3, completed: [0]), [1, 2])
+        XCTAssertEqual(ChatInitialAttachmentUploadPolicy.pendingIndices(total: 3, completed: [0, 1, 2]), [])
+        // Completions from a differently-sized earlier pass are tolerated.
+        XCTAssertEqual(ChatInitialAttachmentUploadPolicy.pendingIndices(total: 2, completed: [5]), [0, 1])
+    }
 }
 
 private actor RecordingAttachmentStore: ChatDraftAttachmentStoring {
