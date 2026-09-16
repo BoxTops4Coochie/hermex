@@ -20,7 +20,9 @@ struct GitBranchPickerButton: View {
             showsPicker = true
         } label: {
             // Quiet inline control matching the composer toolbar row: no pill
-            // background, 44 pt tall for the hit target.
+            // background, 44 pt tall for the hit target. Capped like the other
+            // row text controls so a long branch name truncates (middle) instead
+            // of pushing later controls out of the scroller's viewport.
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(AppFont.subheadline())
@@ -33,7 +35,10 @@ struct GitBranchPickerButton: View {
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
-            .frame(minHeight: 44)
+            .frame(
+                maxWidth: ComposerToolbarControlMetrics.textControlMaxWidth,
+                minHeight: 44
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.chatTactile(.compactControl))

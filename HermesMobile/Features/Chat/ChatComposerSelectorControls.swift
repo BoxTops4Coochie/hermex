@@ -107,26 +107,12 @@ struct ComposerModelEffortMenu: View {
         // UIKit needs the nested menu's full geometry before presentation. Deferring
         // this tree makes the first submenu expansion visibly re-anchor.
         ChatUIKitMenuButton(loadsMenuEagerly: true) {
-            HStack(spacing: 5) {
-                if ProviderGlyphKind.resolve(providerID: selection.modelProviderID) != nil {
-                    ProviderGlyph(providerID: selection.modelProviderID)
-                        .frame(width: 15, height: 15)
-                }
-
-                Text(selection.title)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .font(controlFont)
-                    .layoutPriority(1)
-
-                Image(systemName: "chevron.down")
-                    .font(chevronFont)
-            }
-            .foregroundStyle(color)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, ComposerInlineControlLabel.horizontalPadding)
-            .frame(minHeight: ComposerInlineControlLabel.minimumHeight)
-            .contentShape(Rectangle())
+            ComposerModelEffortMenuLabel(
+                selection: selection,
+                color: color,
+                controlFont: controlFont,
+                chevronFont: chevronFont
+            )
             .transaction { transaction in
                 transaction.animation = nil
             }
@@ -288,9 +274,59 @@ struct ComposerModelEffortSelection: Equatable, Sendable {
     }
 }
 
+/// Width budget for the composer toolbar row's text controls. Pure values so
+/// the rule is unit-testable.
+enum ComposerToolbarControlMetrics {
+    /// Widest a single text control (model, workspace, profile, git branch)
+    /// may grow. Long titles truncate at this bound instead of pushing later
+    /// controls out of the scroller's viewport, which left the profile pill
+    /// clipped and untappable at the trailing edge. Tuned so plus, model, a
+    /// short workspace and profile title stay visible ahead of the trailing
+    /// fade on standard-width phones; narrow phones, accessibility sizes and
+    /// several long titles at once still overflow and scroll behind the edge
+    /// fades. Icons, chips and circles keep their natural size.
+    static let textControlMaxWidth: CGFloat = 104
+}
+
+/// The model+effort menu's label: provider glyph, one-line title, chevron.
+/// Capped to `ComposerToolbarControlMetrics.textControlMaxWidth` so a long
+/// model name truncates (the title carries the line-limit machinery) instead
+/// of refusing to compress and eating the whole toolbar row.
+struct ComposerModelEffortMenuLabel: View {
+    let selection: ComposerModelEffortSelection
+    let color: Color
+    let controlFont: Font
+    let chevronFont: Font
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if ProviderGlyphKind.resolve(providerID: selection.modelProviderID) != nil {
+                ProviderGlyph(providerID: selection.modelProviderID)
+                    .frame(width: 15, height: 15)
+            }
+
+            Text(selection.title)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .font(controlFont)
+                .layoutPriority(1)
+
+            Image(systemName: "chevron.down")
+                .font(chevronFont)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, ComposerInlineControlLabel.horizontalPadding)
+        .frame(
+            maxWidth: ComposerToolbarControlMetrics.textControlMaxWidth,
+            minHeight: ComposerInlineControlLabel.minimumHeight
+        )
+        .contentShape(Rectangle())
+    }
+}
+
 /// Quiet toolbar-row control: icon, one-line title, optional chevron, no pill
 /// background, so the row reads as one surface. 44 pt tall for the hit target.
-private struct ComposerInlineControlLabel: View {
+struct ComposerInlineControlLabel: View {
     static let minimumHeight: CGFloat = 44
     static let horizontalPadding: CGFloat = 6
 
@@ -318,7 +354,10 @@ private struct ComposerInlineControlLabel: View {
         }
         .foregroundStyle(color)
         .padding(.horizontal, Self.horizontalPadding)
-        .frame(minHeight: Self.minimumHeight)
+        .frame(
+            maxWidth: ComposerToolbarControlMetrics.textControlMaxWidth,
+            minHeight: Self.minimumHeight
+        )
         .contentShape(Rectangle())
     }
 }
