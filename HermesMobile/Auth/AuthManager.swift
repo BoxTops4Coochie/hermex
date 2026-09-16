@@ -113,17 +113,27 @@ final class AuthManager {
         serverURLString: String,
         customHeaders: [CustomHeader]? = nil
     ) async throws -> AuthStatusResponse {
-        // Apply the in-progress headers before the very first probe so the health
-        // and auth-status calls already traverse the proxy. Passing nil leaves the
-        // current headers untouched (#255).
+        // Normalize first so a bad URL fails before anything touches state.
+        let serverURL = try Self.normalizedServerURL(from: serverURLString)
+
+        // Probe through a client bound to the attempted headers (the health and
+        // auth-status calls must traverse the proxy), and only move them into
+        // the shared store once the probe succeeds — mirror of `addServer`. A
+        // failed probe or rejected URL must not leave the attempted headers
+        // live for the active server. Passing nil leaves the current headers
+        // untouched (#255).
+        let client: any AuthAPIClient
+        if let customHeaders {
+            client = probeClientFactory(serverURL, customHeaders.sanitizedForStorage())
+        } else {
+            client = clientFactory(serverURL)
+        }
+
+        let status = try await testConnection(client: client)
         if let customHeaders {
             headerStore.replace(with: customHeaders.sanitizedForStorage())
         }
-
-        let serverURL = try Self.normalizedServerURL(from: serverURLString)
-        let client = clientFactory(serverURL)
-
-        return try await testConnection(client: client)
+        return status
     }
 
     private func testConnection(client: any AuthAPIClient) async throws -> AuthStatusResponse {
@@ -142,13 +152,21 @@ final class AuthManager {
     ) async {
         lastErrorMessage = nil
 
-        if let customHeaders {
-            headerStore.replace(with: customHeaders.sanitizedForStorage())
-        }
-
         do {
+            // Normalize first so a bad URL fails before anything touches state.
             let serverURL = try Self.normalizedServerURL(from: serverURLString)
-            let client = clientFactory(serverURL)
+            // Probe (and log in) through a client bound to the attempted
+            // headers — the same mirror of `addServer` as in `testConnection`:
+            // the shared store is only swapped once the whole flow succeeds, so
+            // a failed configure leaves the active server's live headers
+            // untouched while its in-flight requests keep using them. Passing
+            // nil keeps the current headers (#255).
+            let client: any AuthAPIClient
+            if let customHeaders {
+                client = probeClientFactory(serverURL, customHeaders.sanitizedForStorage())
+            } else {
+                client = clientFactory(serverURL)
+            }
             let authStatus = try await testConnection(client: client)
 
             if let message = Self.unsupportedSignInMessage(for: authStatus) {
@@ -174,6 +192,11 @@ final class AuthManager {
             }
 
             // Persist only on success: the server URL and the headers that reached it.
+            // The header-store swap is deferred to here, after validation, probe,
+            // and login all succeeded.
+            if let customHeaders {
+                headerStore.replace(with: customHeaders.sanitizedForStorage())
+            }
             try keychain.save(serverURL.absoluteString, forKey: .serverURL)
             // Record (or re-activate) this server in the multi-server registry,
             // shadowing the Keychain `server_url` write above (#15). Dedupes by

@@ -3516,6 +3516,42 @@ final class ChatViewModelSendTests: XCTestCase {
         XCTAssertNotNil(viewModel.lastError)
     }
 
+    /// A cancelled load (the coordinator tears down an in-flight transcript
+    /// reload when a newer one supersedes it) is not a failure: APIClient wraps
+    /// the URLSession cancellation in `APIError.network`, and the load must
+    /// revert its cache-first placeholder and surface nothing.
+    @MainActor
+    func testLoadMessagesCancellationRevertsPlaceholderAndSurfacesNothing() async throws {
+        let context = try makeContext()
+        let serverURL = try XCTUnwrap(URL(string: "https://example.test"))
+        try CacheStore.cacheMessages(
+            [
+                ChatMessage(role: "user", content: "Cached question", timestamp: 1_770_000_001, messageId: "cached-user"),
+                ChatMessage(role: "assistant", content: "Cached answer", timestamp: 1_770_000_002, messageId: "cached-assistant")
+            ],
+            serverURL: serverURL,
+            sessionID: "session-abc",
+            in: context
+        )
+
+        let viewModel = try makeViewModel { request in
+            XCTAssertEqual(request.url?.path, "/api/session")
+            // The wrapped shape a cancelled load actually arrives as.
+            throw URLError(.cancelled)
+        }
+
+        await viewModel.loadMessages(modelContext: context)
+
+        // The cache-first placeholder is cleaned back off, and no error state
+        // flipped: not a failure, just superseded work.
+        XCTAssertTrue(viewModel.messages.isEmpty)
+        XCTAssertFalse(viewModel.isViewingCachedData)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(viewModel.lastError)
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertFalse(viewModel.hasOlderMessages)
+    }
+
     @MainActor
     func testLoadMessagesDoesNotUseCachedTranscriptForRealServerError() async throws {
         let context = try makeContext()

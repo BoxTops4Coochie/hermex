@@ -364,6 +364,10 @@ final class ScopedSaveFailureKeychainStore: KeychainStoring {
     /// When `true`, the scoped `save(_:forKey:scope:)` throws instead of writing;
     /// every other call keeps delegating to the wrapped store.
     var failsScopedSave = false
+    /// When `true`, the unscoped `save(_:forKey:)` throws too — for doubles that
+    /// need a failing top-level blob write (e.g. the `ServerRegistry` `.servers`
+    /// entry), not just a failing per-server scoped write.
+    var failsUnscopedSave = false
     /// The wrapped store, exposed so tests can assert on what was (or wasn't) written.
     let inner = InMemoryKeychainStore()
 
@@ -371,6 +375,9 @@ final class ScopedSaveFailureKeychainStore: KeychainStoring {
     struct KeychainSaveError: Error {}
 
     func save(_ value: String, forKey key: KeychainStore.Key) throws {
+        if failsUnscopedSave {
+            throw KeychainSaveError()
+        }
         try inner.save(value, forKey: key)
     }
 
@@ -398,6 +405,27 @@ final class ScopedSaveFailureKeychainStore: KeychainStoring {
     }
 }
 
+/// A probe double that always fails like an unreachable server, so tests can
+/// exercise AuthManager's failed-configure/probe paths (which must leave the
+/// live header store untouched) without inventing server responses.
+private struct UnreachableAuthAPIClient: AuthAPIClient {
+    func health() async throws -> HealthResponse {
+        throw URLError(.cannotConnectToHost)
+    }
+
+    func authStatus() async throws -> AuthStatusResponse {
+        AuthStatusResponse(authEnabled: false)
+    }
+
+    func login(password: String) async throws -> LoginResponse {
+        LoginResponse(ok: true, message: nil, error: nil)
+    }
+
+    func logout() async throws -> LoginResponse {
+        LoginResponse(ok: true, message: nil, error: nil)
+    }
+}
+
 @MainActor
 final class CustomHeaderAuthManagerTests: XCTestCase {
     private func makeManager(
@@ -405,7 +433,15 @@ final class CustomHeaderAuthManagerTests: XCTestCase {
         store: CustomHeaderStore,
         client: MockAuthAPIClient
     ) -> AuthManager {
-        AuthManager(keychain: keychain, clientFactory: { _ in client }, headerStore: store, serverRegistry: ServerRegistry.inMemory())
+        AuthManager(
+            keychain: keychain,
+            clientFactory: { _ in client },
+            // `configure`/`testConnection` probe through this factory when the
+            // caller passes headers, so the double must answer there too.
+            probeClientFactory: { _, _ in client },
+            headerStore: store,
+            serverRegistry: ServerRegistry.inMemory()
+        )
     }
 
     func testConfigurePersistsHeadersOnSuccess() async throws {
@@ -429,6 +465,100 @@ final class CustomHeaderAuthManagerTests: XCTestCase {
         let saved = try XCTUnwrap(keychain.scopedValue(.customHeaders, scope: "https://proxy.test"))
         XCTAssertEqual([CustomHeader].decodeFromStorage(saved).map(\.value), ["Bearer abc"])
         XCTAssertNil(keychain.savedValues[.customHeaders])
+    }
+
+    /// A configure that fails URL validation must leave the live header store
+    /// (and the active server's in-flight requests) untouched: the attempted
+    /// headers only move into the shared store once the whole flow succeeds.
+    func testConfigureWithInvalidURLLeavesHeaderStoreUntouched() async throws {
+        let keychain = InMemoryKeychainStore()
+        let store = CustomHeaderStore()
+        store.replace(with: [CustomHeader(name: "X-Existing", value: "keep")])
+        let client = MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: false))
+        let manager = makeManager(keychain: keychain, store: store, client: client)
+
+        await manager.configure(
+            serverURLString: "bad url with spaces",
+            password: "",
+            customHeaders: [CustomHeader(name: "X-New", value: "swap")]
+        )
+
+        XCTAssertEqual(manager.lastErrorMessage, APIError.invalidServerURL.localizedDescription)
+        XCTAssertEqual(store.snapshot().map(\.value), ["keep"])
+        XCTAssertNil(keychain.savedValues[.serverURL])
+        XCTAssertEqual(client.loginPasswords, [])
+    }
+
+    /// A configure whose login is rejected must leave the attempted headers out
+    /// of the live store — before the deferred swap, a failed configure left
+    /// them live for the active server's requests.
+    func testFailedConfigureLeavesAttemptedHeadersOutOfTheLiveStore() async throws {
+        let keychain = InMemoryKeychainStore()
+        let store = CustomHeaderStore()
+        store.replace(with: [CustomHeader(name: "X-Existing", value: "keep")])
+        let client = MockAuthAPIClient(
+            authStatus: AuthStatusResponse(authEnabled: true, loggedIn: false),
+            loginResponse: LoginResponse(ok: false, message: nil, error: "nope")
+        )
+        let manager = makeManager(keychain: keychain, store: store, client: client)
+
+        await manager.configure(
+            serverURLString: "https://proxy.test",
+            password: "wrong",
+            customHeaders: [CustomHeader(name: "X-New", value: "swap")]
+        )
+
+        XCTAssertEqual(manager.lastErrorMessage, APIError.unauthorized.localizedDescription)
+        XCTAssertEqual(store.snapshot().map(\.value), ["keep"])
+        XCTAssertNil(keychain.savedValues[.serverURL])
+        XCTAssertNil(keychain.scopedValue(.customHeaders, scope: "https://proxy.test"))
+    }
+
+    /// `testConnection` applies the attempted headers only after the probe
+    /// succeeds — and never persists them (that's `configure`'s job).
+    func testTestConnectionAppliesAttemptedHeadersOnlyOnSuccess() async throws {
+        let keychain = InMemoryKeychainStore()
+        let store = CustomHeaderStore()
+        store.replace(with: [CustomHeader(name: "X-Old", value: "old")])
+        let client = MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: false))
+        let manager = makeManager(keychain: keychain, store: store, client: client)
+
+        _ = try await manager.testConnection(
+            serverURLString: "https://proxy.test",
+            customHeaders: [CustomHeader(name: "Authorization", value: "Bearer abc")]
+        )
+
+        XCTAssertEqual(store.snapshot().map(\.name), ["Authorization"])
+        XCTAssertNil(keychain.savedValues[.serverURL])
+        XCTAssertEqual(manager.state, .unconfigured)
+    }
+
+    /// A failed probe must not swap the live store; the old headers stay in
+    /// effect for whatever is still running against the active server.
+    func testTestConnectionFailureLeavesHeaderStoreUntouched() async throws {
+        let keychain = InMemoryKeychainStore()
+        let store = CustomHeaderStore()
+        store.replace(with: [CustomHeader(name: "X-Old", value: "keep")])
+        let manager = AuthManager(
+            keychain: keychain,
+            probeClientFactory: { _, _ in UnreachableAuthAPIClient() },
+            headerStore: store,
+            serverRegistry: ServerRegistry.inMemory()
+        )
+
+        do {
+            _ = try await manager.testConnection(
+                serverURLString: "https://proxy.test",
+                customHeaders: [CustomHeader(name: "X-New", value: "swap")]
+            )
+            XCTFail("Expected the probe to fail")
+        } catch {
+            // The probe failure is the caller's problem to surface; this test
+            // only cares about the store below.
+        }
+
+        XCTAssertEqual(store.snapshot().map(\.value), ["keep"])
+        XCTAssertNil(keychain.savedValues[.serverURL])
     }
 
     func testPasskeyOnlyServerShowsSpecificMessageAndDoesNotLogIn() async throws {

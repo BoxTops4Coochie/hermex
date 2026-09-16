@@ -46,4 +46,22 @@ final class APIClientUploadTests: APIClientTestCase {
         XCTAssertEqual(response.mime, "image/jpeg")
         XCTAssertEqual(response.isImage, true)
     }
+
+    /// Same error contract as `sendData`: a URLSession failure surfaces as
+    /// `APIError.network`, not a raw `URLError` — callers matching that case
+    /// must see upload failures too.
+    func testUploadFileWrapsNetworkFailureInAPIError() async {
+        let client = makeClient { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        do {
+            _ = try await client.uploadFile(sessionID: "abc123", data: Data("x".utf8), filename: "a.png")
+            XCTFail("Expected APIError.network")
+        } catch {
+            guard case APIError.network = error else {
+                return XCTFail("Expected APIError.network, got \(error)")
+            }
+        }
+    }
 }

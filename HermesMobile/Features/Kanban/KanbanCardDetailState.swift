@@ -129,7 +129,17 @@ final class KanbanCardDetailState {
             await fetchDetail(showsLoadingState: false)
         } catch {
             guard activeMutationID == mutationID else { return }
-            guard !isCancellation(error) else { return }
+            // A cancelled submission is not a failure, but leaving
+            // `.submitting` behind wedges the composer forever: fetchDetail
+            // refuses while a mutation is active and refresh() only routes
+            // `.outcomeUncertain` to recovery. Mirror performStatusMutation,
+            // which restores `.failed` on cancellation so a retry is possible.
+            guard !isCancellation(error) else {
+                commentSubmission = .failed
+                pendingAttempt = nil
+                activeMutationID = nil
+                return
+            }
             forwardAuthentication(error)
             if KanbanEndpointCompatibility.isMissingCapability(error) {
                 onCapabilityUnavailable(.comments)
@@ -228,7 +238,15 @@ final class KanbanCardDetailState {
             activeMutationID = nil
         } catch {
             guard activeMutationID == expectedMutationID else { return }
-            guard !isCancellation(error) else { return }
+            // Cancelling the outcome check leaves the result genuinely unknown:
+            // restore `.outcomeUncertain` (the one state refresh() routes back
+            // through this check) instead of wedging `.checkingResult` forever.
+            // The pending attempt is kept so the re-check can still settle.
+            guard !isCancellation(error) else {
+                commentSubmission = .outcomeUncertain
+                activeMutationID = nil
+                return
+            }
             forwardAuthentication(error)
             if isNotFound(error) {
                 pendingAttempt = nil

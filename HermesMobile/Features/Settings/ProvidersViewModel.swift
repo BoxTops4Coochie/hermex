@@ -38,11 +38,13 @@ final class ProvidersViewModel {
             guard generation == loadGeneration else { return }
             providers = response.providers ?? []
             activeProviderID = Self.normalizedProviderID(response.activeProvider)
-        } catch is CancellationError {
+        } catch where Self.isCancellationError(error) {
             // The owning view was dismissed (or the refresh gesture was torn
             // down) mid-request — don't surface "cancelled" as a load error.
-        } catch let error as URLError where error.code == .cancelled {
-            // Same cancellation, surfaced through URLSession.
+            // APIClient wraps every URLSession error in `APIError.network`, so
+            // the check has to unwrap it; a bare `URLError` filter never matched
+            // a cancelled request. Mirrors
+            // `ArchivedSessionsViewModel.isCancellationError`.
         } catch {
             guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
@@ -51,6 +53,24 @@ final class ProvidersViewModel {
         // A newer load owns the loading state now — leave it alone.
         guard generation == loadGeneration else { return }
         isLoading = false
+    }
+
+    /// Cancellation arrives as a raw `CancellationError` or as a (possibly
+    /// `APIError.network`-wrapped) `URLError.cancelled`.
+    private static func isCancellationError(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let underlying: Error
+        if case APIError.network(let wrapped) = error {
+            underlying = wrapped
+        } else {
+            underlying = error
+        }
+
+        guard let urlError = underlying as? URLError else { return false }
+        return urlError.code == .cancelled
     }
 
     func isActive(_ provider: ProviderSummary) -> Bool {
