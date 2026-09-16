@@ -67,7 +67,7 @@ final class ServerRegistryTests: XCTestCase {
         writer.activate(url: try url("https://example.test"))
 
         // The blob is in the Keychain, not UserDefaults...
-        XCTAssertNotNil(keychain.savedValues[.servers])
+        XCTAssertNotNil(keychain.inner.savedValues[.servers])
         // ...and a brand-new registry over the same Keychain hydrates from it.
         let reader = ServerRegistry(keychain: keychain)
         XCTAssertEqual(reader.servers.count, 1)
@@ -87,14 +87,14 @@ final class ServerRegistryTests: XCTestCase {
 
         // The in-memory snapshot still reflects the mutation…
         XCTAssertEqual(registry.servers.map(\.id), ["https://example.test"])
-        XCTAssertNil(keychain.savedValues[.servers])
+        XCTAssertNil(keychain.inner.savedValues[.servers])
         // …and the failed write-through is captured, not vanished.
         XCTAssertTrue(registry.lastPersistenceError is ScopedSaveFailureKeychainStore.KeychainSaveError)
 
         // A later successful write-through clears the captured failure.
         keychain.failsUnscopedSave = false
         registry.activate(url: try url("https://other.test"))
-        XCTAssertNotNil(keychain.savedValues[.servers])
+        XCTAssertNotNil(keychain.inner.savedValues[.servers])
         XCTAssertNil(registry.lastPersistenceError)
     }
 
