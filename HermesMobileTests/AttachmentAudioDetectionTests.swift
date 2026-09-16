@@ -117,4 +117,91 @@ final class AttachmentAudioDetectionTests: XCTestCase {
         await model.loadIfNeeded(using: { nil })
         XCTAssertEqual(model.phase, .failed)
     }
+
+    // MARK: - Inline player retry
+
+    /// A transient fetch failure must not brick the card for the row's lifetime:
+    /// retry re-runs the load with the `didLoad` latch reset and recovers.
+    @MainActor
+    func testRetryAfterFailedLoadRecoversToReady() async {
+        let model = InlineAudioPlayerModel()
+        await model.loadIfNeeded(using: { nil })
+        XCTAssertEqual(model.phase, .failed)
+
+        await model.retry(using: { Self.wavData() })
+        XCTAssertEqual(model.phase, .ready)
+    }
+
+    /// A retry that fails again leaves the card retryable rather than bricked.
+    @MainActor
+    func testRepeatedFailedRetryStaysRecoverable() async {
+        let model = InlineAudioPlayerModel()
+        await model.loadIfNeeded(using: { nil })
+        await model.retry(using: { nil })
+        XCTAssertEqual(model.phase, .failed)
+
+        await model.retry(using: { Self.wavData() })
+        XCTAssertEqual(model.phase, .ready)
+    }
+
+    /// Retry is only a recovery path: it must not reload a healthy player.
+    @MainActor
+    func testRetryDoesNotReloadHealthyPlayer() async {
+        let model = InlineAudioPlayerModel()
+        await model.loadIfNeeded(using: { Self.wavData() })
+        XCTAssertEqual(model.phase, .ready)
+
+        await model.retry(using: { nil })
+        XCTAssertEqual(model.phase, .ready)
+    }
+
+    /// The shared playback-failure transition — taken by a decode error and by a
+    /// synchronous `play()` refusal — leaves honest state, and retry recovers
+    /// from it too.
+    @MainActor
+    func testPlaybackFailureMarksFailedAndRetryRecovers() async {
+        let model = InlineAudioPlayerModel()
+        await model.loadIfNeeded(using: { Self.wavData() })
+        XCTAssertEqual(model.phase, .ready)
+
+        model.handlePlaybackFailure()
+        XCTAssertEqual(model.phase, .failed)
+        XCTAssertFalse(model.isPlaying)
+
+        await model.retry(using: { Self.wavData() })
+        XCTAssertEqual(model.phase, .ready)
+    }
+
+    // MARK: - WAV fixture
+
+    /// Minimal 8 kHz / 16-bit / mono PCM WAV: 800 silent samples.
+    private static func wavData() -> Data {
+        let sampleRate: UInt32 = 8_000
+        let bitsPerSample: UInt16 = 16
+        let channelCount: UInt16 = 1
+        let dataByteCount = 800 * 2
+
+        var data = Data()
+        data.append(contentsOf: "RIFF".utf8)
+        appendLittleEndian(UInt32(36 + dataByteCount), to: &data)
+        data.append(contentsOf: "WAVE".utf8)
+        data.append(contentsOf: "fmt ".utf8)
+        appendLittleEndian(UInt32(16), to: &data)
+        appendLittleEndian(UInt16(1), to: &data)
+        appendLittleEndian(channelCount, to: &data)
+        appendLittleEndian(sampleRate, to: &data)
+        appendLittleEndian(sampleRate * UInt32(channelCount) * UInt32(bitsPerSample / 8), to: &data)
+        appendLittleEndian(channelCount * (bitsPerSample / 8), to: &data)
+        appendLittleEndian(bitsPerSample, to: &data)
+        data.append(contentsOf: "data".utf8)
+        appendLittleEndian(UInt32(dataByteCount), to: &data)
+        data.append(Data(repeating: 0, count: dataByteCount))
+        return data
+    }
+
+    private static func appendLittleEndian(_ value: some FixedWidthInteger, to data: inout Data) {
+        Swift.withUnsafeBytes(of: value.littleEndian) { buffer in
+            data.append(contentsOf: buffer)
+        }
+    }
 }
