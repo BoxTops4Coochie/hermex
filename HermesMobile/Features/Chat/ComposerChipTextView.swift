@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 /// The composer's editor: a text view that draws known skill references as
 /// atomic chips while every value that leaves it stays the draft's own text.
-final class ComposerChipTextView: UITextView {
+final class ComposerChipTextView: UITextView, UIGestureRecognizerDelegate {
     var isKeyboardSendEnabled = false
     var onKeyboardSend: () -> Void = {}
     var onPasteFileProviders: ([NSItemProvider]) -> Void = { _ in }
@@ -49,14 +49,24 @@ final class ComposerChipTextView: UITextView {
         let isRightToLeft: Bool
     }
 
+    /// The chip tap's recognizer, kept so its gate can tell it apart from the
+    /// text view's own tap recognizers.
+    private weak var chipTapRecognizer: UITapGestureRecognizer?
+
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
 
-        // Rides alongside the text view's own tap rather than replacing it, so
-        // the caret still lands where the finger did and only a tap that
-        // actually covers a chip's glyph reports one.
+        // Reports chip taps. It may only BEGIN on a touch that covers a chip's
+        // glyph (the gate lives in `gestureRecognizerShouldBegin`): a tap
+        // recognizer that recognizes on plain text wins the exclusive race
+        // against the text view's own tap gestures and force-fails them, which
+        // is what broke caret placement and the double- and triple-tap
+        // selections on plain drafts (#499). By the time the action runs, the
+        // race is already lost, so gating there came too late.
         let chipTap = UITapGestureRecognizer(target: self, action: #selector(handleChipTap))
         chipTap.cancelsTouchesInView = false
+        chipTap.delegate = self
+        chipTapRecognizer = chipTap
         addGestureRecognizer(chipTap)
 
         registerForTraitChanges(
@@ -112,6 +122,26 @@ final class ComposerChipTextView: UITextView {
             return
         }
         onTapChip(token)
+    }
+
+    /// Whether a tap landing on `point` covers a chip's glyph — the decision
+    /// the chip tap recognizer begins on.
+    func shouldBeginChipTap(at point: CGPoint) -> Bool {
+        chipToken(at: point) != nil
+    }
+
+    /// Keeps the chip tap out of every touch that has no chip to report. A
+    /// recognizing tap wins the exclusive race against the text view's own tap
+    /// gestures and force-fails them (#499), so a tap over plain text must
+    /// never begin at all — the caret placement, double-tap word selection,
+    /// and triple-tap select-all that live in the text view's own recognizers
+    /// then keep the touch to themselves. Everything else chains to `super` so
+    /// the scroll view's own gating still applies.
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === chipTapRecognizer else {
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+        return shouldBeginChipTap(at: gestureRecognizer.location(in: self))
     }
 
     /// The chip whose glyph covers `point`, or `nil`.
