@@ -91,6 +91,10 @@ final class SessionListViewModel {
     private(set) var remoteContentSearchExcerpts: [String: String] = [:]
     private var activeRemoteSearchQuery: String?
     private var sessionOpenGeneration = 0
+    /// Last attempt of the throttled full reload that backs streaming rows
+    /// reporting no `activeStreamId` (see
+    /// ``streamlessReloadThrottleInterval``); nil until the first attempt.
+    private var lastStreamlessReloadAt: Date?
 
     private let client: APIClient
     private let sessionMutator: SessionMutator
@@ -429,15 +433,37 @@ final class SessionListViewModel {
         lastError == nil ? .unchanged : .failed
     }
 
+    /// Rate limit for the full reload that refreshes streaming rows which
+    /// report no `activeStreamId`. The 1s monitor keeps ticking while such a
+    /// row streams, and every tick through that branch is a full
+    /// `GET /api/sessions` plus a SwiftData cache write, so the reload is
+    /// allowed at most once per interval. Rows with a stream ID keep the
+    /// targeted per-stream status check, and the stale-snapshot clear (nothing
+    /// streaming anymore) still reloads immediately.
+    static let streamlessReloadThrottleInterval: TimeInterval = 5
+
     @discardableResult
     func refreshActiveSessionStatesIfNeeded(
         streamIDs rawStreamIDs: [String],
-        modelContext: ModelContext? = nil
+        modelContext: ModelContext? = nil,
+        now: Date = Date()
     ) async -> ActiveSessionStateRefreshResult {
         guard !isViewingCachedData, !isLoading else { return .unchanged }
 
         let streamIDs = Self.normalizedStreamIDs(rawStreamIDs)
         guard !streamIDs.isEmpty else {
+            // No streaming row at all: this is the monitor's stale-snapshot
+            // clear right before it stops, so reload immediately and leave it
+            // unthrottled.
+            guard sessions.contains(where: SessionRowView.isActiveStreaming) else {
+                return await load(modelContext: modelContext) ? .reloaded : loadFailureRefreshResult
+            }
+
+            if let lastReloadAt = lastStreamlessReloadAt,
+               now.timeIntervalSince(lastReloadAt) < Self.streamlessReloadThrottleInterval {
+                return .unchanged
+            }
+            lastStreamlessReloadAt = now
             return await load(modelContext: modelContext) ? .reloaded : loadFailureRefreshResult
         }
 

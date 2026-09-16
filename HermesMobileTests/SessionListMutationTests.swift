@@ -777,6 +777,105 @@ final class SessionListMutationTests: XCTestCase {
         }
     }
 
+    /// A row can stream with no `activeStreamId` (gateway-managed runs — the
+    /// model treats the two fields as independent), so the empty-streamIDs
+    /// branch is a full reload the 1s monitor would otherwise repeat every
+    /// tick. It must run at most once per the view model's throttle interval.
+    @MainActor
+    func testStreamlessStreamingRowReloadIsThrottledToOncePerInterval() async throws {
+        var loadCount = 0
+        var statusCount = 0
+        let viewModel = try makeViewModel { request in
+            switch request.url?.path {
+            case "/api/sessions":
+                loadCount += 1
+                return apiTestJSONResponse("""
+                {
+                  "sessions": [
+                    {
+                      "session_id": "session-streaming",
+                      "title": "Streaming work",
+                      "archived": false,
+                      "is_streaming": true
+                    }
+                  ]
+                }
+                """, for: request)
+            case "/api/chat/stream/status":
+                statusCount += 1
+                return apiTestJSONResponse(#"{"active": true}"#, for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        await viewModel.load()
+        XCTAssertEqual(loadCount, 1)
+
+        let firstTick = Date(timeIntervalSince1970: 1_000)
+        let firstResult = await viewModel.refreshActiveSessionStatesIfNeeded(streamIDs: [], now: firstTick)
+        XCTAssertEqual(firstResult, .reloaded)
+        XCTAssertEqual(loadCount, 2)
+
+        let throttledResult = await viewModel.refreshActiveSessionStatesIfNeeded(
+            streamIDs: [],
+            now: firstTick.addingTimeInterval(1)
+        )
+        XCTAssertEqual(throttledResult, .unchanged)
+        XCTAssertEqual(loadCount, 2)
+        XCTAssertEqual(viewModel.sessions.first?.isStreaming, true)
+
+        let windowPassedResult = await viewModel.refreshActiveSessionStatesIfNeeded(
+            streamIDs: [],
+            now: firstTick.addingTimeInterval(SessionListViewModel.streamlessReloadThrottleInterval)
+        )
+        XCTAssertEqual(windowPassedResult, .reloaded)
+        XCTAssertEqual(loadCount, 3)
+
+        // The streamless branch is the full reload only; no per-stream status
+        // probe ever fires for a row without a stream ID.
+        XCTAssertEqual(statusCount, 0)
+    }
+
+    /// With nothing streaming, the empty-streamIDs refresh stays the
+    /// unthrottled stale-snapshot clear: each tick reloads, and the monitor
+    /// stops calling once its rows go idle.
+    @MainActor
+    func testEmptyStreamIDsWithoutActiveRowsReloadImmediatelyEachTick() async throws {
+        var loadCount = 0
+        let viewModel = try makeViewModel { request in
+            switch request.url?.path {
+            case "/api/sessions":
+                loadCount += 1
+                return apiTestJSONResponse("""
+                {
+                  "sessions": [
+                    {"session_id": "session-idle", "title": "Idle work", "archived": false}
+                  ]
+                }
+                """, for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        await viewModel.load()
+        XCTAssertEqual(loadCount, 1)
+
+        let tick = Date(timeIntervalSince1970: 1_000)
+        let firstResult = await viewModel.refreshActiveSessionStatesIfNeeded(streamIDs: [], now: tick)
+        XCTAssertEqual(firstResult, .reloaded)
+
+        let secondResult = await viewModel.refreshActiveSessionStatesIfNeeded(
+            streamIDs: [],
+            now: tick.addingTimeInterval(0.5)
+        )
+        XCTAssertEqual(secondResult, .reloaded)
+        XCTAssertEqual(loadCount, 3)
+    }
+
     @MainActor
     func testPinArchiveMoveAndDeleteCallServerMutationThenReloadSessions() async throws {
         var loadCount = 0
