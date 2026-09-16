@@ -180,6 +180,14 @@ final class InsightsViewModel {
                 guard activeLoadID == loadID, !Task.isCancelled else { return }
                 lastError = error
                 if hadLoadedAnalytics {
+                    // Both sources failed for this window. Drop the previous
+                    // window's numbers rather than leave them under the newly
+                    // selected segment; the fallback banner explains why the
+                    // figures are empty.
+                    serverInsights = nil
+                    sessions = []
+                    loadedTimeframe = timeframe
+                    dataSource = .localFallback
                     fallbackReason = error.localizedDescription
                 } else {
                     errorMessage = error.localizedDescription
