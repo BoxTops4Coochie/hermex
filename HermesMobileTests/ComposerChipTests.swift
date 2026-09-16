@@ -381,6 +381,76 @@ final class ComposerChipDocumentTests: XCTestCase {
     }
 }
 
+/// The chip tap recognizer may only begin on a touch that covers a chip's
+/// glyph. A tap recognizer that recognizes on plain text wins the exclusive
+/// race against the text view's own tap gestures and force-fails them — which
+/// is what broke caret placement, double-tap word selection, and triple-tap
+/// select-all on plain drafts (#499). Touch synthesis is not available to a
+/// unit test (that needs private `UITouch` APIs, and the app has no UI-test
+/// target), so the gate is pinned at both of its layers instead: the begin
+/// decision itself, and the recognizer's wiring to it.
+@MainActor
+final class ComposerChipTapGateTests: XCTestCase {
+    /// `run [chip] now` laid out: "run " at display offsets 0-3, the chip as
+    /// one glyph at 4, then " now" from 5.
+    private func makeEditor() -> ComposerChipTextView {
+        let textView = ComposerChipTextView(frame: CGRect(x: 0, y: 0, width: 320, height: 100))
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.chipSkills = [SkillSlashSuggestion(name: "ask-matt", category: nil, description: nil)]
+        textView.replaceDocument(with: "run /ask-matt now")
+        textView.layoutIfNeeded()
+        return textView
+    }
+
+    private func glyphCenter(atDisplayOffset offset: Int, in textView: ComposerChipTextView) throws -> CGPoint {
+        let range = try XCTUnwrap(textView.textRange(from: NSRange(location: offset, length: 1)))
+        let rect = try XCTUnwrap(textView.firstRect(for: range))
+        return CGPoint(x: rect.midX, y: rect.midY)
+    }
+
+    func testATapOverAChipGlyphBegins() throws {
+        let textView = makeEditor()
+
+        XCTAssertTrue(textView.shouldBeginChipTap(at: try glyphCenter(atDisplayOffset: 4, in: textView)))
+    }
+
+    func testATapOverPlainContentNeverBegins() throws {
+        let textView = makeEditor()
+
+        XCTAssertFalse(textView.shouldBeginChipTap(at: try glyphCenter(atDisplayOffset: 6, in: textView)))
+    }
+
+    func testATapInTheSpaceBesideAChipDoesNotBegin() throws {
+        let textView = makeEditor()
+
+        XCTAssertFalse(textView.shouldBeginChipTap(at: try glyphCenter(atDisplayOffset: 5, in: textView)))
+    }
+
+    func testATapInTheEmptySpaceBelowTheDraftDoesNotBegin() {
+        let textView = makeEditor()
+
+        XCTAssertFalse(textView.shouldBeginChipTap(at: CGPoint(x: 160, y: 90)))
+    }
+
+    func testTheGateLeavesEveryOtherRecognizerAlone() {
+        let textView = makeEditor()
+
+        XCTAssertTrue(textView.gestureRecognizerShouldBegin(UITapGestureRecognizer()))
+    }
+
+    func testTheChipTapRecognizerIsGatedByTheEditor() {
+        let textView = makeEditor()
+
+        let chipTap = textView.gestureRecognizers?
+            .compactMap { $0 as? UITapGestureRecognizer }
+            .first { $0.delegate === textView }
+        XCTAssertNotNil(chipTap, "the chip tap must be gated by the editor itself")
+        XCTAssertFalse(chipTap?.cancelsTouchesInView ?? true)
+    }
+}
+
 final class ComposerDropRouteTests: XCTestCase {
     func testRoutesAMixOfFilesAndImages() throws {
         let route = try XCTUnwrap(
