@@ -228,6 +228,72 @@ final class InsightsViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testFailedTimeframeSwitchDropsThePreviousWindowData() async throws {
+        let client = SequencedInsightsClient(
+            insightsResults: [
+                .success(try decodeInsights(#"{"period_days": 30, "total_sessions": 5, "total_tokens": 350}"#)),
+                .failure(StubInsightsError()),
+                .success(try decodeInsights(#"{"period_days": 30, "total_sessions": 5, "total_tokens": 350}"#))
+            ],
+            sessionsError: StubInsightsError()
+        )
+        let viewModel = InsightsViewModel(client: client)
+
+        await viewModel.load()
+        XCTAssertEqual(viewModel.dataSource, .server)
+        XCTAssertEqual(viewModel.totalTokens, 350)
+        XCTAssertEqual(viewModel.loadedTimeframe, .last30Days)
+
+        // Switch to 90 days while both the insights call and the sessions
+        // fallback fail: the screen must not keep 30-day figures under the
+        // 90-day segment. The display clears, matches the selected window,
+        // and the fallback banner explains why nothing is shown.
+        viewModel.selectedTimeframe = .last90Days
+        await viewModel.load()
+
+        XCTAssertEqual(client.requestedDays, [30, 90])
+        XCTAssertNil(viewModel.serverInsights)
+        XCTAssertTrue(viewModel.sessions.isEmpty)
+        XCTAssertEqual(viewModel.loadedTimeframe, .last90Days)
+        XCTAssertEqual(viewModel.dataSource, .localFallback)
+        XCTAssertEqual(viewModel.fallbackReason, "Server insights unavailable")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(viewModel.hasLoadedAnalytics)
+        XCTAssertEqual(viewModel.totalTokens, 0)
+        XCTAssertTrue(viewModel.chartBuckets.isEmpty)
+        XCTAssertEqual(viewModel.periodTitle, "90 days")
+
+        // The screen is not a dead end: switching back reloads normally.
+        viewModel.selectedTimeframe = .last30Days
+        await viewModel.load()
+
+        XCTAssertEqual(client.requestedDays, [30, 90, 30])
+        XCTAssertEqual(viewModel.dataSource, .server)
+        XCTAssertEqual(viewModel.totalTokens, 350)
+        XCTAssertEqual(viewModel.loadedTimeframe, .last30Days)
+        XCTAssertNil(viewModel.fallbackReason)
+    }
+
+    @MainActor
+    func testFirstLoadFailureWhenBothSourcesFailKeepsTheErrorMessagePath() async throws {
+        let client = SequencedInsightsClient(
+            insightsResults: [.failure(StubInsightsError())],
+            sessionsError: StubInsightsError()
+        )
+        let viewModel = InsightsViewModel(client: client)
+        viewModel.selectedTimeframe = .last7Days
+
+        await viewModel.load()
+
+        XCTAssertEqual(client.requestedDays, [7])
+        XCTAssertEqual(viewModel.dataSource, .local)
+        XCTAssertEqual(viewModel.errorMessage, "Server insights unavailable")
+        XCTAssertFalse(viewModel.hasLoadedAnalytics)
+        XCTAssertNil(viewModel.serverInsights)
+        XCTAssertTrue(viewModel.sessions.isEmpty)
+    }
+
+    @MainActor
     func testChartBucketsZeroFillTheWholeWindow() async throws {
         let viewModel = try await loadedViewModel(timeframe: .last7Days, json: """
         {
@@ -548,6 +614,31 @@ private final class StubInsightsClient: InsightsDataClient {
 private struct StubInsightsError: LocalizedError {
     var errorDescription: String? {
         "Server insights unavailable"
+    }
+}
+
+/// Serves scripted insights results in order; used when the first load must
+/// succeed and a later one must fail.
+private final class SequencedInsightsClient: InsightsDataClient {
+    private var insightsResults: [Result<InsightsResponse, Error>]
+    private let sessionsError: Error
+    private(set) var requestedDays: [Int] = []
+
+    init(insightsResults: [Result<InsightsResponse, Error>], sessionsError: Error) {
+        self.insightsResults = insightsResults
+        self.sessionsError = sessionsError
+    }
+
+    func insights(days: Int) async throws -> InsightsResponse {
+        requestedDays.append(days)
+        guard !insightsResults.isEmpty else {
+            throw StubInsightsError()
+        }
+        return try insightsResults.removeFirst().get()
+    }
+
+    func sessions() async throws -> SessionsResponse {
+        throw sessionsError
     }
 }
 
