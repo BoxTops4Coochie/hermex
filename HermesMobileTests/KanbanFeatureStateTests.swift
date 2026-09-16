@@ -290,6 +290,29 @@ final class KanbanFeatureStateTests: XCTestCase {
         XCTAssertEqual(requestsAfterDraftChange, requestsBeforeToggle)
     }
 
+    /// The grouped board keys sections by the grouping key itself (the
+    /// normalized assignee), so a regroup that keeps the same profiles keeps
+    /// the same section identity — what the grouped list's `ForEach` uses —
+    /// instead of re-keying sections by array position.
+    func testGroupedVisibleCardsKeySectionsByAssigneeAcrossRegroups() async {
+        let state = KanbanFeatureState(
+            server: URL(string: "https://example.test")!,
+            client: KanbanClientStub(boardResult: .success(KanbanFixtures.groupedSnapshot))
+        )
+        await state.load()
+        state.selectedStatus = "ready"
+
+        // Two nameless cards land in one Unassigned section: the key must be
+        // unique per group or SwiftUI would see duplicate section ids.
+        XCTAssertEqual(state.groupedVisibleCards.map(\.profile), [nil, "builder", "reviewer"])
+
+        state.searchText = "builder"
+        XCTAssertEqual(state.groupedVisibleCards.map(\.profile), ["builder"])
+
+        state.searchText = ""
+        XCTAssertEqual(state.groupedVisibleCards.map(\.profile), [nil, "builder", "reviewer"])
+    }
+
     func testBoardSwitchClearsBoardScopedDataAndRevalidatesCompatibility() async {
         let client = DeferredBoardSwitchClient()
         let state = KanbanFeatureState(server: URL(string: "https://example.test")!, client: client)
@@ -2835,6 +2858,7 @@ private enum KanbanFixtures {
     static let stalenessSnapshot = decode(KanbanBoardSnapshot.self, #"{"changed":true,"columns":[{"name":"running","tasks":[{"id":"r1","status":"running","age_seconds":599},{"id":"r2","status":"running","age_seconds":600},{"id":"r3","status":"running","age_seconds":3600}]},{"name":"ready","tasks":[{"id":"q1","status":"ready","age_seconds":3599},{"id":"q2","status":"ready","age_seconds":3600}]},{"name":"blocked","tasks":[{"id":"b1","status":"blocked","age_seconds":3599},{"id":"b2","status":"blocked","age_seconds":3600},{"id":"b3","status":"blocked","age_seconds":86400}]}]}"#)
     static let stats = decode(KanbanStats.self, #"{"by_status":{"triage":0}}"#)
     static let history = decode(KanbanAssigneeHistory.self, #"{"assignees":["builder"]}"#)
+    static let groupedSnapshot = decode(KanbanBoardSnapshot.self, #"{"changed":true,"read_only":false,"columns":[{"name":"ready","tasks":[{"id":"G-1","title":"Unassigned one","status":"ready"},{"id":"G-2","title":"Unassigned two","status":"ready"},{"id":"G-3","title":"Builder card","status":"ready","assignee":"builder"},{"id":"G-4","title":"Reviewer card","status":"ready","assignee":"reviewer"}]}]}"#)
 
     private static func decode<T: Decodable>(_ type: T.Type, _ json: String) -> T {
         let decoder = JSONDecoder()

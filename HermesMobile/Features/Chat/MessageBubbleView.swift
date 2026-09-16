@@ -302,8 +302,11 @@ struct MessageBubbleView: View {
                 // Identity follows the attachment, not the row position. The
                 // transcript bubble's id is positional (`transcript:<index>`),
                 // so without this a recycled row would keep its old `@State`
-                // model (and stale audio bytes) for a different clip.
-                .id(attachment.path ?? attachment.name ?? "\(index)")
+                // model (and stale audio bytes) for a different clip. The index
+                // only disambiguates identical clips (same path and name): a
+                // message's attachments never reorder, so the combined key
+                // stays stable across re-renders.
+                .id("\(attachment.path ?? attachment.name ?? "audio")#\(index)")
                 .frame(width: contentWidth, alignment: .trailing)
             }
 

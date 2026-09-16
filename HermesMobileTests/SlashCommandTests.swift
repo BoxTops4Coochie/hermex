@@ -358,6 +358,27 @@ final class SlashCommandTests: XCTestCase {
         XCTAssertEqual(suggestions.first?.description, "Agent command")
     }
 
+    /// `AgentCommand.id` is content-derived: the same payload must decode to
+    /// the same identity twice (a fresh-UUID fallback would hand SwiftUI a new
+    /// one on every read and rebuild the list on every poll), and distinct
+    /// rows must not share an identity.
+    func testAgentCommandIDsAreStableAcrossDecodesAndDistinctPerRow() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let json = Data("""
+        {"commands": [
+          {"name": "resume", "description": "Resume a session", "cli_only": false},
+          {"description": "No name"}
+        ]}
+        """.utf8)
+
+        let first = try decoder.decode(CommandsResponse.self, from: json)
+        let second = try decoder.decode(CommandsResponse.self, from: json)
+
+        XCTAssertEqual((first.commands ?? []).map(\.id), ["command|resume", "command|"])
+        XCTAssertEqual((first.commands ?? []).map(\.id), (second.commands ?? []).map(\.id))
+    }
+
     // MARK: - Ranking
 
     private func fields(

@@ -1104,7 +1104,12 @@ struct KanbanStatusFocusView: View {
                 emptyContent
                     .listRowSeparator(.hidden)
             } else if model.groupByProfile {
-                ForEach(Array(model.groupedVisibleCards.enumerated()), id: \.offset) { _, group in
+                // Sections key by the grouping key itself (the normalized
+                // assignee; at most one nil group for Unassigned), not by
+                // array position, so a regroup that keeps the same profiles
+                // keeps the same section identity instead of tearing down
+                // and rebuilding every section and its rows.
+                ForEach(model.groupedVisibleCards, id: \.profile) { group in
                     Section {
                         ForEach(group.cards, id: \.cardID) { card in
                             cardNavigationLink(card)

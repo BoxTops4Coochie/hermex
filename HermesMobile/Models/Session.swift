@@ -98,7 +98,11 @@ struct ProjectMutationResponse: Decodable, Equatable {
 }
 
 struct ProjectSummary: Decodable, Equatable, Hashable, Identifiable {
-    var id: String { projectId ?? name ?? UUID().uuidString }
+    /// Stable across refreshes. Never a fresh `UUID` — `id` is computed, so a
+    /// UUID fallback would hand SwiftUI a different identity on every read and
+    /// rebuild every row of the list on every poll. The server keys projects
+    /// by id; `name` only disambiguates rows that decode without one.
+    var id: String { "project|\(projectId ?? "")|\(name ?? "")" }
 
     let projectId: String?
     let name: String?

@@ -164,4 +164,31 @@ final class FileTreeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(fuzzy, 100)
         XCTAssertNil(FileTreeSearch.score(value: "coordinator", query: "xyz", fuzzy: true))
     }
+
+    // MARK: - Identity
+
+    /// `WorkspaceEntry.id` is content-derived: the same payload must decode to
+    /// the same identity twice (a fresh-UUID fallback would hand SwiftUI a new
+    /// one on every read and rebuild the list on every poll), and distinct
+    /// rows must not share an identity.
+    func testWorkspaceEntryIDsAreStableAcrossDecodesAndDistinctPerRow() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let json = Data("""
+        {"entries": [
+          {"name": "Sources", "path": "Sources", "is_dir": true},
+          {"name": "notes.txt"},
+          {}
+        ]}
+        """.utf8)
+
+        let first = try decoder.decode(DirectoryListResponse.self, from: json)
+        let second = try decoder.decode(DirectoryListResponse.self, from: json)
+
+        XCTAssertEqual(
+            (first.entries ?? []).map(\.id),
+            ["entry|Sources|Sources", "entry||notes.txt", "entry||"]
+        )
+        XCTAssertEqual((first.entries ?? []).map(\.id), (second.entries ?? []).map(\.id))
+    }
 }
