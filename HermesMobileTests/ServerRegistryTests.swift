@@ -67,7 +67,7 @@ final class ServerRegistryTests: XCTestCase {
         writer.activate(url: try url("https://example.test"))
 
         // The blob is in the Keychain, not UserDefaults...
-        XCTAssertNotNil(keychain.inner.savedValues[.servers])
+        XCTAssertNotNil(keychain.savedValues[.servers])
         // ...and a brand-new registry over the same Keychain hydrates from it.
         let reader = ServerRegistry(keychain: keychain)
         XCTAssertEqual(reader.servers.count, 1)
