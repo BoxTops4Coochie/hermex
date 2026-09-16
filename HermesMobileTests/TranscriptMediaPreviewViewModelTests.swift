@@ -465,7 +465,10 @@ final class TranscriptMediaPreviewViewModelTests: XCTestCase {
             resolvedKind: .image
         )
 
-        XCTAssertEqual(payload.filename, "abc123.jpg")
+        // `.jpeg`'s preferred filename extension on iOS 26 is "jpeg" (the type
+        // declares both "jpg" and "jpeg"); the container matches the bytes,
+        // which is the contract under test.
+        XCTAssertEqual(payload.filename, "abc123.jpeg")
         XCTAssertEqual(payload.contentType, .jpeg)
         XCTAssertTrue(payload.isImage)
         XCTAssertFalse(payload.isVideo)
