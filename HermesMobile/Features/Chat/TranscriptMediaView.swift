@@ -607,11 +607,54 @@ private struct TranscriptMediaUnavailableChip: View {
     }
 }
 
-private actor TranscriptMediaImageCache {
+/// Bounded-cache policy for `TranscriptMediaImageCache`: keep at most `capacity`
+/// images, evicting the oldest insertions first. Extracted as a pure function so
+/// the eviction decision is unit-testable.
+enum TranscriptMediaImageCacheEviction {
+    /// A long session can reference many images; 50 full-size decoded images is
+    /// a sane ceiling for the process lifetime.
+    static let capacity = 50
+
+    /// Returns the keys that must leave the cache so inserting `incomingKey`
+    /// keeps the total at or under `capacity`. `currentKeys` is ordered oldest
+    /// first; an incoming key that is already cached makes no room necessary.
+    static func keysToEvict<Key: Hashable>(
+        currentKeys: [Key],
+        incomingKey: Key,
+        capacity: Int
+    ) -> [Key] {
+        guard !currentKeys.contains(incomingKey) else { return [] }
+
+        let overflow = currentKeys.count + 1 - capacity
+        guard overflow > 0 else { return [] }
+        return Array(currentKeys.prefix(overflow))
+    }
+}
+
+actor TranscriptMediaImageCache {
     static let shared = TranscriptMediaImageCache()
 
     private var cache: [TranscriptMediaImageCacheKey: UIImage] = [:]
+    private var order: [TranscriptMediaImageCacheKey] = []
     private var inFlight: [TranscriptMediaImageCacheKey: Task<UIImage?, Never>] = [:]
+    private var memoryPressureObserver: (any NSObjectProtocol)?
+
+    private init() {
+        memoryPressureObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.purgeForMemoryPressure() }
+        }
+    }
+
+    deinit {
+        if let memoryPressureObserver {
+            NotificationCenter.default.removeObserver(memoryPressureObserver)
+        }
+    }
 
     func image(
         for reference: TranscriptMediaReference,
@@ -639,9 +682,29 @@ private actor TranscriptMediaImageCache {
         inFlight[key] = nil
 
         if let image {
-            cache[key] = image
+            insert(image, for: key)
         }
         return image
+    }
+
+    /// Drops everything on a memory warning. Images are re-decodable from the
+    /// server, so an empty cache is always safe to rebuild.
+    func purgeForMemoryPressure() {
+        cache.removeAll()
+        order.removeAll()
+    }
+
+    private func insert(_ image: UIImage, for key: TranscriptMediaImageCacheKey) {
+        for evictedKey in TranscriptMediaImageCacheEviction.keysToEvict(
+            currentKeys: order,
+            incomingKey: key,
+            capacity: TranscriptMediaImageCacheEviction.capacity
+        ) {
+            cache[evictedKey] = nil
+            order.removeAll { $0 == evictedKey }
+        }
+        cache[key] = image
+        order.append(key)
     }
 }
 

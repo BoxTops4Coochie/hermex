@@ -422,6 +422,227 @@ final class TranscriptMediaPreviewViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canExportMedia)
     }
 
+    // MARK: - Image format sniffing
+
+    func testImageTypeRecognizesMagicBytes() {
+        XCTAssertEqual(TranscriptMediaExportSupport.imageType(for: Self.jpegData()), .jpeg)
+        XCTAssertEqual(
+            TranscriptMediaExportSupport.imageType(for: Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])),
+            .png
+        )
+        XCTAssertEqual(TranscriptMediaExportSupport.imageType(for: Data("GIF89a".utf8)), .gif)
+
+        var webp = Data("RIFF".utf8)
+        webp.append(Data(repeating: 0, count: 4))
+        webp.append(Data("WEBP".utf8))
+        XCTAssertEqual(TranscriptMediaExportSupport.imageType(for: webp), .webP)
+
+        var heic = Data(repeating: 0, count: 4)
+        heic.append(Data("ftyp".utf8))
+        heic.append(Data("heic".utf8))
+        XCTAssertEqual(TranscriptMediaExportSupport.imageType(for: heic), .heic)
+
+        var heif = Data(repeating: 0, count: 4)
+        heif.append(Data("ftyp".utf8))
+        heif.append(Data("mif1".utf8))
+        XCTAssertEqual(TranscriptMediaExportSupport.imageType(for: heif), .heif)
+    }
+
+    func testImageTypeRejectsShortAndUnknownData() {
+        XCTAssertNil(TranscriptMediaExportSupport.imageType(for: Data()))
+        XCTAssertNil(TranscriptMediaExportSupport.imageType(for: Data([0xFF, 0xD8])))
+        XCTAssertNil(TranscriptMediaExportSupport.imageType(for: Data("definitely not an image".utf8)))
+        // A WAV file is RIFF-based but carries WAVE, not WEBP, at the form type.
+        XCTAssertNil(TranscriptMediaExportSupport.imageType(for: Self.wavData()))
+    }
+
+    /// An extensionless reference whose bytes are actually JPEG must not export
+    /// as "name.png" — the container comes from the magic numbers.
+    func testExtensionlessJPEGExportsWithMatchingContainer() {
+        let payload = TranscriptMediaExportSupport.payload(
+            for: TranscriptMediaReference(rawReference: "https://cdn.example.test/media/abc123"),
+            data: Self.jpegData(),
+            resolvedKind: .image
+        )
+
+        // `.jpeg`'s preferred filename extension on iOS 26 is "jpeg" (the type
+        // declares both "jpg" and "jpeg"); the container matches the bytes,
+        // which is the contract under test.
+        XCTAssertEqual(payload.filename, "abc123.jpeg")
+        XCTAssertEqual(payload.contentType, .jpeg)
+        XCTAssertTrue(payload.isImage)
+        XCTAssertFalse(payload.isVideo)
+    }
+
+    func testExtensionlessWebPExportsWithMatchingContainer() {
+        var webp = Data("RIFF".utf8)
+        webp.append(Data(repeating: 0, count: 4))
+        webp.append(Data("WEBP".utf8))
+
+        let payload = TranscriptMediaExportSupport.payload(
+            for: TranscriptMediaReference(rawReference: "https://cdn.example.test/media/pic7"),
+            data: webp,
+            resolvedKind: .image
+        )
+
+        XCTAssertEqual(payload.filename, "pic7.webp")
+        XCTAssertEqual(payload.contentType, .webP)
+        XCTAssertTrue(payload.isImage)
+        XCTAssertFalse(payload.isVideo)
+    }
+
+    // MARK: - Image cache eviction policy
+
+    func testEvictionUnderCapacityEvictsNothing() {
+        XCTAssertEqual(
+            TranscriptMediaImageCacheEviction.keysToEvict(
+                currentKeys: ["a", "b"],
+                incomingKey: "c",
+                capacity: 3
+            ),
+            []
+        )
+    }
+
+    func testEvictionOverCapacityEvictsOldestAndKeepsIncoming() {
+        XCTAssertEqual(
+            TranscriptMediaImageCacheEviction.keysToEvict(
+                currentKeys: ["a", "b", "c"],
+                incomingKey: "d",
+                capacity: 3
+            ),
+            ["a"]
+        )
+    }
+
+    func testEvictionForAlreadyCachedIncomingKeyEvictsNothing() {
+        XCTAssertEqual(
+            TranscriptMediaImageCacheEviction.keysToEvict(
+                currentKeys: ["a", "b", "c"],
+                incomingKey: "b",
+                capacity: 3
+            ),
+            []
+        )
+    }
+
+    func testEvictionWithZeroCapacityEmptiesTheCache() {
+        XCTAssertEqual(
+            TranscriptMediaImageCacheEviction.keysToEvict(
+                currentKeys: ["a", "b"],
+                incomingKey: "c",
+                capacity: 0
+            ),
+            ["a", "b"]
+        )
+    }
+
+    func testEvictionOrdersTranscriptMediaCacheKeysOldestFirst() {
+        let first = TranscriptMediaImageCacheKey(
+            namespace: "session-a",
+            reference: TranscriptMediaReference(rawReference: "https://cdn.example.test/1")
+        )
+        let second = TranscriptMediaImageCacheKey(
+            namespace: "session-a",
+            reference: TranscriptMediaReference(rawReference: "https://cdn.example.test/2")
+        )
+        let incoming = TranscriptMediaImageCacheKey(
+            namespace: "session-a",
+            reference: TranscriptMediaReference(rawReference: "https://cdn.example.test/3")
+        )
+
+        XCTAssertEqual(
+            TranscriptMediaImageCacheEviction.keysToEvict(
+                currentKeys: [first, second],
+                incomingKey: incoming,
+                capacity: 2
+            ),
+            [first]
+        )
+    }
+
+    /// Behavioral pass through the shared cache: past capacity the oldest keys
+    /// are evicted (their loads re-run), while recent keys stay cached. Robust
+    /// to unrelated pre-existing entries because the fill exceeds the capacity.
+    @MainActor
+    func testImageCacheEvictsOldestEntriesBeyondCapacity() async throws {
+        let counter = LoadCounter()
+        let tinyPNG = try XCTUnwrap(Self.imageData())
+
+        func loader() -> (TranscriptMediaReference) async -> Data? {
+            { _ in
+                counter.increment()
+                return tinyPNG
+            }
+        }
+
+        func reference(_ index: Int) -> TranscriptMediaReference {
+            TranscriptMediaReference(rawReference: "https://cache.test/media/\(index)")
+        }
+
+        let fillCount = TranscriptMediaImageCacheEviction.capacity + 10
+        for index in 1...fillCount {
+            _ = await TranscriptMediaImageCache.shared.image(
+                for: reference(index),
+                cacheNamespace: "eviction-tests",
+                loadMediaImage: loader()
+            )
+        }
+        XCTAssertEqual(counter.value, fillCount)
+
+        // The oldest key was evicted during the fill, so it loads again.
+        _ = await TranscriptMediaImageCache.shared.image(
+            for: reference(1),
+            cacheNamespace: "eviction-tests",
+            loadMediaImage: loader()
+        )
+        XCTAssertEqual(counter.value, fillCount + 1)
+
+        // Re-inserting the oldest key evicted the next one in line.
+        _ = await TranscriptMediaImageCache.shared.image(
+            for: reference(fillCount - TranscriptMediaImageCacheEviction.capacity + 1),
+            cacheNamespace: "eviction-tests",
+            loadMediaImage: loader()
+        )
+        XCTAssertEqual(counter.value, fillCount + 2)
+
+        // The most recent key is still cached.
+        _ = await TranscriptMediaImageCache.shared.image(
+            for: reference(fillCount),
+            cacheNamespace: "eviction-tests",
+            loadMediaImage: loader()
+        )
+        XCTAssertEqual(counter.value, fillCount + 2)
+    }
+
+    /// A memory-pressure purge drops everything, so the next request reloads.
+    @MainActor
+    func testImageCacheMemoryPressurePurgeReloads() async throws {
+        let counter = LoadCounter()
+        let tinyPNG = try XCTUnwrap(Self.imageData())
+        let loader: (TranscriptMediaReference) async -> Data? = { _ in
+            counter.increment()
+            return tinyPNG
+        }
+        let reference = TranscriptMediaReference(rawReference: "https://cache.test/media/purge-me")
+
+        _ = await TranscriptMediaImageCache.shared.image(
+            for: reference,
+            cacheNamespace: "purge-tests",
+            loadMediaImage: loader
+        )
+        XCTAssertEqual(counter.value, 1)
+
+        await TranscriptMediaImageCache.shared.purgeForMemoryPressure()
+
+        _ = await TranscriptMediaImageCache.shared.image(
+            for: reference,
+            cacheNamespace: "purge-tests",
+            loadMediaImage: loader
+        )
+        XCTAssertEqual(counter.value, 2)
+    }
+
     private static let baseURL = URL(string: "https://example.test")!
 
     private static func makeTestVideo() async throws -> URL {
@@ -533,6 +754,12 @@ final class TranscriptMediaPreviewViewModelTests: XCTestCase {
         }
     }
 
+    private static func jpegData() -> Data {
+        // Just the JPEG magic numbers and a small filler body; sniffing never
+        // needs a decodable image.
+        Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]) + Data(repeating: 0x4A, count: 8)
+    }
+
     private static func wavData() -> Data {
         let sampleRate: UInt32 = 8_000
         let channelCount: UInt16 = 1
@@ -575,6 +802,25 @@ private enum PhotoLibraryTestVideoError: Error {
     case cannotCreatePixelBuffer
     case cannotAppendFrame
     case cannotFinishWriter
+}
+
+/// Counts media loads from the cache tests; the loader closure runs inside the
+/// cache actor's tasks, so access is lock-guarded.
+private final class LoadCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+    }
 }
 
 private final class TranscriptMediaPreviewRequestRecorder {

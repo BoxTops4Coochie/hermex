@@ -41,7 +41,16 @@ enum TranscriptMediaExportSupport {
         }
 
         if resolvedKind == .image || UIImage(data: data) != nil {
-            return TranscriptMediaExportDescriptor(kind: .image, contentType: .png, fileExtension: "png")
+            // Reached only when the reference carries no usable extension, so
+            // identify the container from the bytes: exporting JPEG/WebP/HEIC
+            // bytes under a .png name makes Photos/Files refuse or mislabel the
+            // document.
+            let sniffedType = imageType(for: data) ?? .png
+            return TranscriptMediaExportDescriptor(
+                kind: .image,
+                contentType: sniffedType,
+                fileExtension: sniffedType.preferredFilenameExtension ?? "png"
+            )
         }
 
         if resolvedKind == .audio || isAudioData(data) {
@@ -57,6 +66,9 @@ enum TranscriptMediaExportSupport {
             return TranscriptMediaExportDescriptor(kind: .data, contentType: .data, fileExtension: "bin")
         }
 
+        // Non-image payloads keep the guessed .mp4 container: the transcript
+        // only routes here for references previewed as video, and movie
+        // containers (ftyp/MOV) are not sniffed beyond that.
         return TranscriptMediaExportDescriptor(kind: .video, contentType: .mpeg4Movie, fileExtension: "mp4")
     }
 
@@ -83,6 +95,55 @@ enum TranscriptMediaExportSupport {
         }
 
         return .data
+    }
+
+    /// Identifies an image container from the bytes' magic numbers. Used when
+    /// the reference carries no file extension, so the export document names the
+    /// real format instead of guessing PNG for everything UIImage can decode.
+    static func imageType(for data: Data) -> UTType? {
+        if data.starts(with: [0xFF, 0xD8, 0xFF]) {
+            return .jpeg
+        }
+
+        if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
+            return .png
+        }
+
+        if data.starts(with: Array("GIF8".utf8)) {
+            return .gif
+        }
+
+        if data.starts(with: Array("RIFF".utf8)),
+           bytes(data, at: 8, count: 4) == Array("WEBP".utf8) {
+            return .webP
+        }
+
+        if bytes(data, at: 4, count: 4) == Array("ftyp".utf8),
+           let heifType = heifType(forMajorBrand: bytes(data, at: 8, count: 4)) {
+            return heifType
+        }
+
+        return nil
+    }
+
+    private static func heifType(forMajorBrand brand: [UInt8]) -> UTType? {
+        guard brand.count == 4, let brandName = String(bytes: brand, encoding: .ascii) else {
+            return nil
+        }
+
+        switch brandName {
+        case "heic", "heix", "heim", "heis", "hevc", "hevx":
+            return .heic
+        case "mif1", "msf1":
+            return .heif
+        default:
+            return nil
+        }
+    }
+
+    private static func bytes(_ data: Data, at offset: Int, count: Int) -> [UInt8] {
+        guard data.count >= offset + count else { return [] }
+        return Array(data[data.startIndex + offset ..< data.startIndex + offset + count])
     }
 
     private static func isAudioData(_ data: Data) -> Bool {

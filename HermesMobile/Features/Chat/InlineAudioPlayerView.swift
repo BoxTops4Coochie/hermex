@@ -20,10 +20,7 @@ struct InlineAudioPlayerView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 if model.phase == .failed {
-                    Text("Couldn't play this audio")
-                        .font(AppFont.caption2())
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    failedRow
                 } else {
                     scrubber
                     timeRow
@@ -116,6 +113,23 @@ struct InlineAudioPlayerView: View {
         .foregroundStyle(.secondary)
         .accessibilityHidden(true)
     }
+
+    /// A load or playback failure is recoverable: `.task` runs once for the
+    /// row's lifetime, so the retry has to re-run the load explicitly.
+    private var failedRow: some View {
+        HStack(spacing: 8) {
+            Text("Couldn't play this audio")
+                .font(AppFont.caption2())
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 8)
+
+            Button("Try Again") {
+                Task { await model.retry(using: load) }
+            }
+            .font(AppFont.caption2(weight: .semibold))
+        }
+    }
 }
 
 /// Coordinates "one clip at a time": when a player starts, it asks the center
@@ -204,6 +218,18 @@ final class InlineAudioPlayerModel {
         configurePlayer(with: data)
     }
 
+    /// Re-runs the load after a failure. The failed phase leaves the `didLoad`
+    /// latch set and `.task` never re-runs for the row's lifetime, so without
+    /// this the card stays bricked until the row is rebuilt.
+    func retry(using load: () async -> Data?) async {
+        guard phase == .failed else { return }
+        didLoad = false
+        currentTime = 0
+        scrubTime = nil
+        player = nil
+        await loadIfNeeded(using: load)
+    }
+
     private func configurePlayer(with data: Data) {
         do {
             let player = try AVAudioPlayer(data: data)
@@ -211,7 +237,7 @@ final class InlineAudioPlayerModel {
                 Task { @MainActor in self?.handlePlaybackFinished() }
             }
             delegateProxy.onDecodeError = { [weak self] in
-                Task { @MainActor in self?.handleDecodeError() }
+                Task { @MainActor in self?.handlePlaybackFailure() }
             }
             player.delegate = delegateProxy
             player.prepareToPlay()
@@ -233,6 +259,8 @@ final class InlineAudioPlayerModel {
             if player.play() {
                 isPlaying = true
                 startTicker()
+            } else {
+                handlePlaybackFailure()
             }
         }
     }
@@ -284,9 +312,11 @@ final class InlineAudioPlayerModel {
     }
 
     /// A file can pass the `AVAudioPlayer(data:)` initializer but still fail to
-    /// decode once playback actually starts. Surface that as a failure instead of
-    /// leaving a live-looking play button that does nothing when tapped.
-    private func handleDecodeError() {
+    /// decode once playback actually starts, and a synchronous `play()` call can
+    /// refuse outright (session or decode trouble). Surface that as a failure
+    /// instead of leaving a live-looking play button that does nothing when
+    /// tapped.
+    func handlePlaybackFailure() {
         isPlaying = false
         stopTicker()
         deactivateSession()
