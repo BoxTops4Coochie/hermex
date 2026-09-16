@@ -2707,6 +2707,51 @@ final class SessionListMutationTests: XCTestCase {
     }
 
     @MainActor
+    func testOpenSessionFailureErrorIsConsumedOnceSoOnlyOneAlertPresents() async throws {
+        let serverMessage = "Messaging sessions cannot be imported"
+        let viewModel = try makeViewModel { request in
+            switch request.url?.path {
+            case "/api/session/import_cli":
+                let response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 403,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )
+                return (try XCTUnwrap(response), Data(#"{"error":"\#(serverMessage)"}"#.utf8))
+            case "/api/session":
+                throw URLError(.cannotFindHost)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+        let listed = SessionSummary(
+            sessionId: "telegram-1",
+            isCliSession: true,
+            rawSource: "telegram",
+            sourceLabel: "Telegram"
+        )
+
+        let opened = await viewModel.sessionForOpening(listed)
+
+        XCTAssertNil(opened)
+        XCTAssertEqual(viewModel.actionErrorMessage, serverMessage)
+
+        // The view copies the failure into its own alert state and consumes the
+        // view-model field; the message must not resurface as a second alert.
+        let copiedMessage = viewModel.actionErrorMessage
+        viewModel.clearActionError()
+
+        XCTAssertEqual(copiedMessage, serverMessage)
+        XCTAssertNil(viewModel.actionErrorMessage)
+
+        viewModel.clearActionError()
+
+        XCTAssertNil(viewModel.actionErrorMessage)
+    }
+
+    @MainActor
     func testStaleCanonicalFallbackCannotReplaceNewerDestination() async throws {
         let detailRequestStarted = expectation(description: "canonical fallback request started")
         let releaseDetailRequest = DispatchSemaphore(value: 0)
