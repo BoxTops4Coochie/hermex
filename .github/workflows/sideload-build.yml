@@ -45,15 +45,13 @@ jobs:
         run: |
           cat > Config/Local.xcconfig <<EOF
           DEVELOPMENT_TEAM =
-          CODE_SIGNING_ALLOWED = NO
-          CODE_SIGN_IDENTITY =
-          CODE_SIGNING_REQUIRED = NO
+          CODE_SIGN_IDENTITY = -
           APP_BUNDLE_IDENTIFIER = ${BUNDLE_ID}
           APP_GROUP_IDENTIFIER = group.${BUNDLE_ID}
           EOF
           cat Config/Local.xcconfig
 
-      - name: Build Release for arm64 device (unsigned)
+      - name: Build Release for arm64 device (ad-hoc signed, entitlements embedded)
         run: |
           set -euo pipefail
           xcodebuild build \
@@ -63,7 +61,21 @@ jobs:
             -destination "generic/platform=iOS" \
             -derivedDataPath DerivedData \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=YES
+
+      - name: Verify app-group entitlements are embedded
+        run: |
+          set -euo pipefail
+          APP=$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "Entitlements of $(basename "${APP}"):"
+          codesign -d --entitlements - "${APP}" 2>/dev/null
+          codesign -d --entitlements - "${APP}" 2>/dev/null | grep -q "com.apple.security.application-groups"
+          echo "App group entitlements: PRESENT"
+          WIDGET=$(find "${APP}/PlugIns" -name "*.appex" | head -1)
+          codesign -d --entitlements - "${WIDGET}" 2>/dev/null | grep -q "com.apple.security.application-groups"
+          echo "Widget app group entitlements: PRESENT"
 
       - name: Package unsigned .ipa
         run: |
