@@ -387,6 +387,6 @@ private extension ChatMessage {
             turnTps: cachedMessage.turnTps,
             turnDuration: cachedMessage.turnDuration,
             turnTtft: cachedMessage.turnTtft
-        })
+        )
     }
 }
