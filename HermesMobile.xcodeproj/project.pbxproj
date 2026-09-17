@@ -480,7 +480,7 @@
 		0D1CE5F12B9E4D4D9E5A01C1 /* SlashCommandExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlashCommandExecutor.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000010 /* HermesMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HermesMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D5E6F700000000011 /* HermesMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesMobileApp.swift; sourceTree = "<group>"; };
-		C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantTurnTimestampFormatter.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Chat/AssistantTurnTimestampFormatter.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000337 /* HermexAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermexAppIntents.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000342 /* ProfileEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEntity.swift; sourceTree = "<group>"; };
