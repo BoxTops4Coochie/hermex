@@ -151,6 +151,8 @@ struct SettingsView: View {
                     SettingsDivider()
 
                     AppIconSettingsSection()
+
+                    WidgetDiagnosticsSection()
                 }
 
                 SettingsCard(title: String(localized: "Interaction")) {
