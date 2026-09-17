@@ -402,15 +402,15 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
     func testAssistantTurnHeaderIsOnlyTheResponseSpeedMarker() {
         XCTAssertTrue(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: "assistant",
-            isEnabled: true,
             hasTextContent: true,
+            isEnabled: true,
             showsResponseSpeed: true,
             hasResponseSpeed: true
         ))
         XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: "assistant",
-            isEnabled: true,
             hasTextContent: true,
+            isEnabled: true,
             showsResponseSpeed: false,
             hasResponseSpeed: true
         ))
@@ -419,8 +419,8 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
     func testInvalidResponseSpeedAloneDoesNotCreateHeaderRow() {
         XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: "assistant",
-            isEnabled: true,
             hasTextContent: true,
+            isEnabled: true,
             showsResponseSpeed: true,
             hasResponseSpeed: false
         ))
@@ -429,8 +429,8 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
     func testAssistantTurnHeaderHiddenForEmptyOrToolOnlyAssistantRow() {
         XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: "assistant",
-            isEnabled: true,
             hasTextContent: false,
+            isEnabled: true,
             showsResponseSpeed: true,
             hasResponseSpeed: true
         ))
@@ -441,8 +441,8 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
             XCTAssertFalse(
                 ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
                     role: role,
-                    isEnabled: true,
-            hasTextContent: true,
+                    hasTextContent: true,
+            isEnabled: true,
                     showsResponseSpeed: true,
                     hasResponseSpeed: true
                 ),
@@ -452,8 +452,8 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
 
         XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: nil,
-            isEnabled: true,
             hasTextContent: true,
+            isEnabled: true,
             showsResponseSpeed: true,
             hasResponseSpeed: true
         ))
