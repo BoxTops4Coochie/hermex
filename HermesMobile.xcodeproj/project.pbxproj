@@ -22,7 +22,8 @@
 		C0DE512E0000000000000220C /* UsageModelRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE512E0000000000000220B /* UsageModelRows.swift */; };
 		0D82B28493C6401D98DA9C0E /* SlashCommandExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6809B8F1391248A4AA77C453 /* SlashCommandExecutorTests.swift */; };
 		1A2B3C4D5E6F700000000001 /* HermesMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000011 /* HermesMobileApp.swift */; };
-		C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000C2 /* AssistantTurnTimestampFormatter.swift */; };
+		C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */; };
+		C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */; };
 		1A2B3C4D5E6F700000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000012 /* ContentView.swift */; };
 		1A2B3C4D5E6F700000000338 /* HermexAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000337 /* HermexAppIntents.swift */; };
 		1A2B3C4D5E6F700000000343 /* ProfileEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000342 /* ProfileEntity.swift */; };
@@ -481,6 +482,7 @@
 		1A2B3C4D5E6F700000000010 /* HermesMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HermesMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D5E6F700000000011 /* HermesMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesMobileApp.swift; sourceTree = "<group>"; };
 		C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/WidgetDiagnosticsSection.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Chat/AssistantTurnTimestampFormatter.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000337 /* HermexAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermexAppIntents.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000342 /* ProfileEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEntity.swift; sourceTree = "<group>"; };
@@ -1784,7 +1786,7 @@
 			files = (
 				1A2B3C4D5E6F700000000001 /* HermesMobileApp.swift in Sources */,
 				C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */,
-C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */,
+				C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */,
 				C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */,
 				1A2B3C4D5E6F700000000002 /* ContentView.swift in Sources */,
 				1A2B3C4D5E6F700000000338 /* HermexAppIntents.swift in Sources */,

@@ -8,12 +8,17 @@ struct WidgetDiagnosticsSection: View {
         ("…", false, "…")
 
     var body: some View {
-        SettingsCard(title: String(localized: "Widget Diagnostics")) {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Widget Diagnostics")
+                .font(.headline)
             Text("App group: \(info.groupID)\nContainer reachable: \(info.container ? "YES" : "NO")\nSnapshot: \(info.snapshot)")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .onAppear(perform: measure)
     }
 
