@@ -27,7 +27,7 @@ struct RecentChatsTimelineProvider: TimelineProvider {
 
     /// Gallery and transient placeholder only. Real entries come from the
     /// app-group file; the gallery cannot wait for the app to write one.
-    private var placeholderSnapshot: RecentChatsSnapshot {
+    private static var placeholderSnapshot: RecentChatsSnapshot {
         RecentChatsSnapshot(
             version: 1,
             serverURL: nil,
