@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import SwiftData
 import SwiftUI
+import WidgetKit
 
 struct SessionListSection: Identifiable {
     enum Kind: String {
@@ -239,6 +240,7 @@ final class SessionListViewModel {
                 }
             applySessions(visibleSessions, archivedCount: response.archivedCount, animation: animation)
             isViewingCachedData = false
+            updateRecentChatsSnapshot(visibleSessions)
 
             if let modelContext {
                 do {
@@ -1228,6 +1230,38 @@ final class SessionListViewModel {
         let filtered = sessions.filter(\.shouldAppearInSessionList)
         guard filtered.count != sessions.count else { return }
         sessions = filtered
+    }
+
+    /// Fire-and-forget refresh of the Home Screen widget's recent-chats
+    /// snapshot. The JSON write goes to a utility task so the list load never
+    /// blocks on file IO, and the store skips the WidgetKit timeline reload
+    /// when the refresh carried the same sessions as before (the throttled
+    /// streamless-reload path can reach this every few seconds while a
+    /// stream is live). The cache-fallback branch below does not write: the
+    /// file already holds what the last successful load knew.
+    private func updateRecentChatsSnapshot(_ loadedSessions: [SessionSummary]) {
+        let entries = loadedSessions
+            .sorted { Self.timestamp(for: $0) > Self.timestamp(for: $1) }
+            .prefix(RecentChatsSnapshotStore.maximumSessionCount)
+            .compactMap { session -> RecentChatsSnapshot.Entry? in
+                guard let sessionID = Self.nonEmpty(session.sessionId) else { return nil }
+                return RecentChatsSnapshot.Entry(
+                    sessionId: sessionID,
+                    title: SessionRowView.displayTitle(for: session),
+                    updatedAt: Date(timeIntervalSince1970: Self.timestamp(for: session))
+                )
+            }
+        // Multi-server installs get a server label in the widget header. The
+        // deep link still opens against the app's currently-active server —
+        // the session deep link has no server parameter (same as Live
+        // Activity taps), so that's the documented limitation.
+        let serverURLString = ServerRegistry.shared.servers.count > 1 ? server.absoluteString : nil
+
+        Task.detached(priority: .utility) {
+            let snapshot = RecentChatsSnapshotStore.makeSnapshot(from: entries, serverURL: serverURLString)
+            guard RecentChatsSnapshotStore.write(snapshot) else { return }
+            WidgetCenter.shared.reloadTimelines(ofKind: RecentChatsSnapshotStore.widgetKind)
+        }
     }
 
     private static func normalizedSearchQuery(_ value: String) -> String {
