@@ -11,6 +11,7 @@ struct MessageBubbleView: View {
     @Environment(\.chatWorkspaceRoot) private var chatWorkspaceRoot
     @AppStorage(ChatTranscriptDisplaySettings.hidesAttachmentPathsKey) private var hidesAttachmentPaths = true
     @AppStorage(ChatTranscriptDisplaySettings.showsResponseSpeedKey) private var showsResponseSpeed = false
+    @AppStorage(ChatTranscriptDisplaySettings.showsAssistantTurnTimestampsKey) private var showsAssistantTurnTimestamps = ChatTranscriptDisplaySettings.defaultShowsTimestamps
 
     let message: ChatMessage
     let loadAttachmentImage: ((String) async -> Data?)?
@@ -160,6 +161,7 @@ struct MessageBubbleView: View {
         ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: message.role,
             hasTextContent: hasVisibleAssistantText,
+            isEnabled: showsAssistantTurnTimestamps,
             showsResponseSpeed: showsResponseSpeed,
             hasResponseSpeed: assistantResponseSpeedText != nil,
             hasTTFT: assistantTTFTText != nil
