@@ -51,7 +51,7 @@ jobs:
           EOF
           cat Config/Local.xcconfig
 
-      - name: Build Release for arm64 device (ad-hoc signed, entitlements embedded)
+      - name: Build Release for arm64 device (unsigned)
         run: |
           set -euo pipefail
           xcodebuild build \
@@ -61,21 +61,47 @@ jobs:
             -destination "generic/platform=iOS" \
             -derivedDataPath DerivedData \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=YES \
-            CODE_SIGN_IDENTITY=- \
-            CODE_SIGNING_REQUIRED=YES
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Verify app-group entitlements are embedded
+      - name: Embed app-group entitlements (ldid)
+        # iOS SDK forbids ad-hoc ("-" identity) signing for device builds, so
+        # the build stays unsigned and ldid embeds the entitlements blob into
+        # each Mach-O with a pseudo-signature. Sideloadly's re-sign preserves
+        # embedded entitlements -> the app group survives and the widget can
+        # read the shared container.
         run: |
           set -euo pipefail
+          brew install ldid
           APP=$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
-          echo "Entitlements of $(basename "${APP}"):"
-          codesign -d --entitlements - "${APP}" 2>/dev/null
-          codesign -d --entitlements - "${APP}" 2>/dev/null | grep -q "com.apple.security.application-groups"
-          echo "App group entitlements: PRESENT"
-          WIDGET=$(find "${APP}/PlugIns" -name "*.appex" | head -1)
-          codesign -d --entitlements - "${WIDGET}" 2>/dev/null | grep -q "com.apple.security.application-groups"
-          echo "Widget app group entitlements: PRESENT"
+          ENT=$(mktemp /tmp/ent.XXXXXX.plist)
+          cat > "${ENT}" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.${BUNDLE_ID}</string>
+            </array>
+            <key>com.apple.developer.team-identifier</key>
+            <string></string>
+          </dict>
+          </plist>
+          EOF
+          sign_bundle() {
+            local bundle="$1"
+            local exe
+            exe=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${bundle}/Info.plist")
+            ldid -S"${ENT}" "${bundle}/${exe}"
+            echo "Entitlements embedded in ${bundle}/${exe}:"
+            ldid -e "${bundle}/${exe}"
+            ldid -e "${bundle}/${exe}" | grep -q "com.apple.security.application-groups"
+          }
+          sign_bundle "${APP}"
+          for APPX in "${APP}"/PlugIns/*.appex; do
+            sign_bundle "${APPX}"
+          done
+          echo "App-group entitlements: PRESENT in app and all extensions"
 
       - name: Package unsigned .ipa
         run: |
