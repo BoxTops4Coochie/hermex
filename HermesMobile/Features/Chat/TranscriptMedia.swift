@@ -149,7 +149,10 @@ enum TranscriptMediaParser {
         // single text segment.
         let hasMediaToken = markdown.contains("MEDIA:")
         let hasFileURL = markdown.contains(fileURLMarker)
-        guard hasMediaToken || hasFileURL else {
+        // v1.6.0 also renders markdown images (workspace/absolute paths,
+        // #404) — a "![" means the fence-aware scanner must run.
+        let hasMarkdownImage = markdown.contains("![")
+        guard hasMediaToken || hasFileURL || hasMarkdownImage else {
             return [TranscriptMediaSegment.text(markdown)]
         }
 
