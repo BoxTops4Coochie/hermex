@@ -174,7 +174,7 @@ enum CacheStore {
             }
         }
 
-        let descriptor = FetchDescriptor<CachedMessage>(
+        let windowDescriptor = FetchDescriptor<CachedMessage>(
             predicate: #Predicate { cachedMessage in
                 cachedMessage.serverURLString == serverURLString
                     && cachedMessage.sessionID == sessionID
@@ -196,7 +196,7 @@ enum CacheStore {
         // is stale (pinned by
         // testCacheMessagesForOneServerDoesNotDeleteAnotherServersMessages).
         let windowSpan = messages.isEmpty ? Int.max : messages.count
-        let staleMessages = try context.fetch(descriptor).filter { cachedMessage in
+        let staleMessages = try context.fetch(windowDescriptor).filter { (cachedMessage: CachedMessage) in
             guard !freshKeys.contains(cachedMessage.cacheKey) else { return false }
             return cachedMessage.sortIndex < windowSpan
         }
