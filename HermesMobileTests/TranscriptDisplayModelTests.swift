@@ -407,7 +407,9 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
             showsResponseSpeed: true,
             hasResponseSpeed: true
         ))
-        XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
+        // Merged semantics: the header also shows when the feature is enabled
+        // even without a speed marker (perf branch behavior).
+        XCTAssertTrue(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: "assistant",
             hasTextContent: true,
             isEnabled: true,
@@ -417,10 +419,20 @@ final class ChatTranscriptDisplaySettingsTests: XCTestCase {
     }
 
     func testInvalidResponseSpeedAloneDoesNotCreateHeaderRow() {
-        XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
+        // With the feature enabled, an invalid speed alone still shows the
+        // header (enabled beats marker validity in the merged predicate)...
+        XCTAssertTrue(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
             role: "assistant",
             hasTextContent: true,
             isEnabled: true,
+            showsResponseSpeed: true,
+            hasResponseSpeed: false
+        ))
+        // ...but with the feature off, an invalid speed creates nothing.
+        XCTAssertFalse(ChatTranscriptDisplaySettings.showsAssistantTurnHeader(
+            role: "assistant",
+            hasTextContent: true,
+            isEnabled: false,
             showsResponseSpeed: true,
             hasResponseSpeed: false
         ))
