@@ -264,7 +264,7 @@ struct ChatTranscriptView: View {
         // LazyVStack keeps off-screen rows unbuilt: markdown parsing, code
         // highlighting, and media tasks then run only for the visible window
         // instead of the full loaded history.
-        return LazyVStack(spacing: transcriptMessageSpacing) {
+        return LazyVStack(spacing: transcriptSpacing) {
             olderMessagesButton(proxy: proxy)
 
             if let compressionReferenceCard, compressionReferenceCard.afterRenderID == nil {
@@ -297,7 +297,6 @@ struct ChatTranscriptView: View {
                         pinReader(proxy: proxy)
                         onToggleTurnFold(turnKey)
                     },
-                    reasoningGroups: reasoningGroups,
                     reasoningGroups: reasoningGroupsByAnchor[transcriptMessage.anchorID, default: []],
                     toolCallGroups: completedToolCallGroupsForAnchor(transcriptMessage.anchorID),
                     liveReasoningText: isReasoningAnchor ? liveReasoningText : "",
