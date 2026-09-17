@@ -1,3 +1,5 @@
+import Foundation
+
 enum AssistantTurnTimestampFormatter {
     private static let sharedFormatter: DateFormatter = makeFormatter(
         locale: .autoupdatingCurrent,
