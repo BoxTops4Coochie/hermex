@@ -142,6 +142,20 @@ enum TranscriptMediaParser {
     ) -> [TranscriptMediaSegment] {
         guard !markdown.isEmpty else { return [] }
 
+        // Cheap marker-presence fast path: the full fence-aware scanner is
+        // O(message length) with per-character index math, and it runs for every
+        // assistant row on every body pass (~60/s while streaming). The vast
+        // majority of messages contain neither marker, so skip straight to a
+        // single text segment.
+        let hasMediaToken = markdown.contains("MEDIA:")
+        let hasFileURL = markdown.contains(fileURLMarker)
+        // v1.6.0 also renders markdown images (workspace/absolute paths,
+        // #404) — a "![" means the fence-aware scanner must run.
+        let hasMarkdownImage = markdown.contains("![")
+        guard hasMediaToken || hasFileURL || hasMarkdownImage else {
+            return [TranscriptMediaSegment.text(markdown)]
+        }
+
         var segments: [TranscriptMediaSegment] = []
         var index = markdown.startIndex
         var isInFence = false
