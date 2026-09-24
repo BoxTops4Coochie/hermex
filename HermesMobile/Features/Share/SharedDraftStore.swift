@@ -63,7 +63,30 @@ struct SharedImportReservation: Equatable, Identifiable {
 
 enum HermesShareDraft {
     static var appGroupIdentifier: String {
-        RecentChatsSnapshotStore.appGroupIdentifier
+        if let hinted = Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String,
+           FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: hinted) != nil {
+            return hinted
+        }
+        // Same runtime discovery as RecentChatsSnapshotStore: SideStore's signing
+        // compounds the implicit group name per re-sign, so scan the embedded
+        // profile for granted groups and use the first one iOS opens.
+        if let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+           let data = try? Data(contentsOf: url),
+           let xmlStart = data.range(of: Data("<?xml".utf8)),
+           let xmlEnd = data.range(of: Data("</plist>".utf8)) {
+            let xml = data.subdata(in: xmlStart.lowerBound..<xmlEnd.upperBound)
+            if let plist = try? PropertyListSerialization.propertyList(from: xml, options: [], format: nil) as? [String: Any],
+               let entitlements = plist["Entitlements"] as? [String: Any],
+               let groups = entitlements["com.apple.security.application-groups"] as? [String] {
+                for granted in groups {
+                    if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: granted) != nil {
+                        return granted
+                    }
+                }
+            }
+        }
+        return Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String
+            ?? "group.com.uzairansar.hermesmobile"
     }
 
     // Legacy single-slot names. Existing installs may still have one of these records.
