@@ -8179,7 +8179,7 @@ final class ChatViewModelSendTests: XCTestCase {
             ChatViewModel.transcriptMessages(
                 from: viewModel.messages,
                 messageOffset: viewModel.messagesOffset
-            ).last?.messageId,
+            ).last?.message.messageId,
             "u-3"
         )
     }
