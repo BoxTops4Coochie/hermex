@@ -37,8 +37,38 @@ enum RecentChatsSnapshotStore {
     static let maximumSessionCount = 12
 
     static var appGroupIdentifier: String {
-        Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String
-            ?? "group.com.uzairansar.hermesmobile"
+        if let hinted = Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String,
+           FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: hinted) != nil {
+            return hinted
+        }
+        // SideStore's signing flow re-creates the APP_GROUPS capability on every
+        // sign, and Apple compounds the implicit group name once per recreation
+        // (group.<bundle-id>.<team>, then .<team> again, ...). The hardcoded hint
+        // therefore lags the profile by one generation after each re-sign. Scan
+        // the embedded provisioning profile for every granted group and return
+        // the first one iOS will actually open a container for.
+        for granted in provisionedAppGroups {
+            if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: granted) != nil {
+                return granted
+            }
+        }
+        return hinted ?? "group.com.uzairansar.hermesmobile"
+    }
+
+    /// App group names granted by the provisioning profile embedded in this
+    /// binary (embedded.mobileprovision), extracted from its plist XML payload.
+    static var provisionedAppGroups: [String] {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let xmlStart = data.range(of: Data("<?xml".utf8)),
+              let xmlEnd = data.range(of: Data("</plist>".utf8))
+        else { return [] }
+        let xml = data.subdata(in: xmlStart.lowerBound..<xmlEnd.upperBound)
+        guard let plist = try? PropertyListSerialization.propertyList(from: xml, options: [], format: nil) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any],
+              let groups = entitlements["com.apple.security.application-groups"] as? [String]
+        else { return [] }
+        return groups
     }
 
     /// Caps and stamps a mapped session list. Callers sort their entries by
