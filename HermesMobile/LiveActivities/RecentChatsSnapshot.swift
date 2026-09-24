@@ -37,7 +37,8 @@ enum RecentChatsSnapshotStore {
     static let maximumSessionCount = 12
 
     static var appGroupIdentifier: String {
-        if let hinted = Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String,
+        let hinted = Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String
+        if let hinted,
            FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: hinted) != nil {
             return hinted
         }
