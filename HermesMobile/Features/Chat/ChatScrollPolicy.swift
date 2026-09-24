@@ -23,18 +23,29 @@ import SwiftUI
 /// reader before it counts as leaving.
 enum ChatScrollPolicy {
     /// Existing transcripts should enter at their latest content as part of the
-    /// scroll view's first layout, before the destination becomes visible.
+    /// scroll view's first layout, before the destination becomes visible. The
+    /// lazy stack pins that offset to an *estimated* content height, which
+    /// before any row is materialized can sit in unallocated space; the
+    /// transcript repairs the landing with one explicit scroll to the bottom
+    /// anchor row identity on first appearance.
     static let initialTranscriptAnchor = UnitPoint.bottom
 
     /// Rich Markdown can finish measuring after the scroll view's initial
     /// layout. Keep those size changes bottom-pinned only while follow is
-    /// latched on and no disclosure toggle is settling; otherwise return nil so
-    /// the reader's offset, and the row they just tapped, stay where they are.
+    /// latched on and a live stream is appending at the bottom — growth the
+    /// stream owns. Otherwise return nil so the reader's offset, and the row
+    /// they just tapped, stay where they are: without a stream a content-size
+    /// change is a lazy-stack estimate correction (rows settling taller or
+    /// shorter than estimated, no new messages), and re-anchoring those yanks
+    /// the reader to the bottom of an estimate that can sit anywhere in the
+    /// real content. Growth from new messages is positioned by the explicit
+    /// follow scroll on the message-count change instead.
     static func sizeChangeAnchor(
         shouldFollowLatestMessage: Bool,
+        isStreaming: Bool = false,
         isDisclosureSettling: Bool = false
     ) -> UnitPoint? {
-        shouldFollowLatestMessage && !isDisclosureSettling ? .bottom : nil
+        shouldFollowLatestMessage && isStreaming && !isDisclosureSettling ? .bottom : nil
     }
 
     /// Distance (pt) from the bottom within which the scroll-to-bottom button

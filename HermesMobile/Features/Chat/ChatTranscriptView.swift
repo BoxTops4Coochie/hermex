@@ -5,6 +5,7 @@ struct ChatTranscriptView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scrollPositionController = ChatScrollPositionController()
+    @State private var hasPerformedInitialBottomAnchorCorrection = false
 
     let isLoading: Bool
     let errorMessage: String?
@@ -139,6 +140,7 @@ struct ChatTranscriptView: View {
                     .defaultScrollAnchor(
                         ChatScrollPolicy.sizeChangeAnchor(
                             shouldFollowLatestMessage: shouldFollowLatestMessage,
+                            isStreaming: activeStreamID != nil,
                             isDisclosureSettling: isDisclosureSettling
                         ),
                         for: .sizeChanges
@@ -163,6 +165,9 @@ struct ChatTranscriptView: View {
                             onDismissKeyboard()
                         }
                     )
+                    .onAppear {
+                        performInitialBottomAnchorCorrectionIfNeeded(proxy: proxy)
+                    }
 
                     if showsScrollToBottomButton {
                         ChatScrollToBottomButton(
@@ -221,6 +226,20 @@ struct ChatTranscriptView: View {
     /// toggle is mid-animation.
     private var isFollowingLatestContent: Bool {
         shouldFollowLatestMessage && !isDisclosureSettling
+    }
+
+    /// The initial-offset anchor lands on the lazy stack's ESTIMATED bottom,
+    /// which on a cold open sits in unmaterialized space — the transcript paints
+    /// empty until a swipe forces layout. One unanimated scroll to the bottom
+    /// anchor row identity on the transcript's first appearance materializes the
+    /// live edge instead; the follow-scroll path yields past the first layout
+    /// pass before scrolling. Later appearances restore the reader's position,
+    /// so this runs exactly once per transcript.
+    private func performInitialBottomAnchorCorrectionIfNeeded(proxy: ScrollViewProxy) {
+        guard !hasPerformedInitialBottomAnchorCorrection else { return }
+        hasPerformedInitialBottomAnchorCorrection = true
+        guard isFollowingLatestContent else { return }
+        onScrollToLatestContent(proxy, false)
     }
 
     /// Identifies the whole transcript content so a scroll to its top can be
