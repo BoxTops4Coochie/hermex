@@ -7950,6 +7950,241 @@ final class ChatViewModelSendTests: XCTestCase {
     }
 
     @MainActor
+    func testCompletionRefreshWithEqualOffsetKeepsUnpersistedOptimisticRow() async throws {
+        var sessionRequestCount = 0
+        let streamClient = SpySSEStreamingClient()
+        let viewModel = try makeViewModel(streamClient: streamClient) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return apiTestJSONResponse(
+                    #"{"session_id": "session-abc", "stream_id": "stream-123"}"#,
+                    for: request
+                )
+            case "/api/session":
+                sessionRequestCount += 1
+
+                let messagesJSON = """
+                  "messages": [
+                    {"role": "user", "content": "First question", "timestamp": 1, "message_id": "u-0"},
+                    {"role": "assistant", "content": "First answer", "timestamp": 2, "message_id": "a-1"},
+                    {"role": "user", "content": "Second question", "timestamp": 3, "message_id": "u-2"}
+                  ],
+                  "_messages_truncated": false,
+                  "_messages_offset": 0
+                """
+                if sessionRequestCount == 1 {
+                    return apiTestJSONResponse(
+                    """
+                    {
+                      "session": {
+                        "session_id": "session-abc",
+                        \(messagesJSON)
+                      }
+                    }
+                    """,
+                    for: request)
+                }
+
+                // Completion refresh racing persistence: the sent row is not in
+                // the server window yet and the window offset is unchanged.
+                // Replacing the transcript wholesale here shrinks the row count,
+                // and that count change is what dumps a following reader.
+                return apiTestJSONResponse(
+                """
+                {
+                  "session": {
+                    "session_id": "session-abc",
+                    \(messagesJSON)
+                  }
+                }
+                """,
+                for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        await viewModel.loadMessages()
+        let didStart = await viewModel.sendMessage("Third question")
+        XCTAssertTrue(didStart)
+        XCTAssertEqual(viewModel.messages.count, 4)
+
+        await viewModel.loadMessages()
+
+        XCTAssertEqual(viewModel.messages.compactMap(\.content), [
+            "First question",
+            "First answer",
+            "Second question",
+            "Third question"
+        ])
+        XCTAssertTrue(viewModel.messages.last?.messageId?.hasPrefix("local-") == true)
+        XCTAssertEqual(viewModel.messages.count, 4)
+        XCTAssertEqual(viewModel.messagesOffset, 0)
+        XCTAssertFalse(viewModel.hasOlderMessages)
+    }
+
+    @MainActor
+    func testCompletionRefreshWithEqualOffsetSplicesServerRowOverOptimisticRow() async throws {
+        var sessionRequestCount = 0
+        let streamClient = SpySSEStreamingClient()
+        let viewModel = try makeViewModel(streamClient: streamClient) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return apiTestJSONResponse(
+                    #"{"session_id": "session-abc", "stream_id": "stream-123"}"#,
+                    for: request
+                )
+            case "/api/session":
+                sessionRequestCount += 1
+
+                if sessionRequestCount == 1 {
+                    return apiTestJSONResponse(
+                    """
+                    {
+                      "session": {
+                        "session_id": "session-abc",
+                        "messages": [
+                          {"role": "user", "content": "First question", "timestamp": 1, "message_id": "u-0"},
+                          {"role": "assistant", "content": "First answer", "timestamp": 2, "message_id": "a-1"},
+                          {"role": "user", "content": "Second question", "timestamp": 3, "message_id": "u-2"}
+                        ],
+                        "_messages_truncated": false,
+                        "_messages_offset": 0
+                      }
+                    }
+                    """,
+                    for: request)
+                }
+
+                // Same-offset window whose last row is the server-confirmed copy
+                // of the sent message. The splice must adopt it without changing
+                // the row count: the optimistic row swaps identity in place.
+                return apiTestJSONResponse(
+                """
+                {
+                  "session": {
+                    "session_id": "session-abc",
+                    "messages": [
+                      {"role": "user", "content": "First question", "timestamp": 1, "message_id": "u-0"},
+                      {"role": "assistant", "content": "First answer", "timestamp": 2, "message_id": "a-1"},
+                      {"role": "user", "content": "Second question", "timestamp": 3, "message_id": "u-2"},
+                      {"role": "user", "content": "Third question", "timestamp": 4, "message_id": "u-3"}
+                    ],
+                    "_messages_truncated": false,
+                    "_messages_offset": 0
+                  }
+                }
+                """,
+                for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        await viewModel.loadMessages()
+        let didStart = await viewModel.sendMessage("Third question")
+        XCTAssertTrue(didStart)
+        XCTAssertEqual(viewModel.messages.count, 4)
+
+        await viewModel.loadMessages()
+
+        XCTAssertEqual(viewModel.messages.compactMap(\.content), [
+            "First question",
+            "First answer",
+            "Second question",
+            "Third question"
+        ])
+        XCTAssertEqual(viewModel.messages.last?.messageId, "u-3")
+        XCTAssertEqual(viewModel.messages.count, 4)
+        XCTAssertEqual(viewModel.messagesOffset, 0)
+        XCTAssertFalse(viewModel.hasOlderMessages)
+    }
+
+    @MainActor
+    func testCompletionRefreshWithEqualOffsetKeepsServerLatestRowAsFollowTargetWhenWindowShrinks() async throws {
+        var sessionRequestCount = 0
+        let streamClient = SpySSEStreamingClient()
+        let viewModel = try makeViewModel(streamClient: streamClient) { request in
+            switch request.url?.path {
+            case "/api/chat/start":
+                return apiTestJSONResponse(
+                    #"{"session_id": "session-abc", "stream_id": "stream-123"}"#,
+                    for: request
+                )
+            case "/api/session":
+                sessionRequestCount += 1
+
+                if sessionRequestCount == 1 {
+                    return apiTestJSONResponse(
+                    """
+                    {
+                      "session": {
+                        "session_id": "session-abc",
+                        "messages": [
+                          {"role": "user", "content": "First question", "timestamp": 1, "message_id": "u-0"},
+                          {"role": "assistant", "content": "First answer", "timestamp": 2, "message_id": "a-1"},
+                          {"role": "user", "content": "Second question", "timestamp": 3, "message_id": "u-2"}
+                        ],
+                        "_messages_truncated": false,
+                        "_messages_offset": 0
+                      }
+                    }
+                    """,
+                    for: request)
+                }
+
+                // The server consumed an ephemeral row between refreshes, so the
+                // same-offset window is one row shorter even with the send
+                // persisted. The follow target after the splice must be the
+                // server-side latest row, never a stale one.
+                return apiTestJSONResponse(
+                """
+                {
+                  "session": {
+                    "session_id": "session-abc",
+                    "messages": [
+                      {"role": "user", "content": "First question", "timestamp": 1, "message_id": "u-0"},
+                      {"role": "assistant", "content": "First answer", "timestamp": 2, "message_id": "a-1"},
+                      {"role": "user", "content": "Third question", "timestamp": 4, "message_id": "u-3"}
+                    ],
+                    "_messages_truncated": false,
+                    "_messages_offset": 0
+                  }
+                }
+                """,
+                for: request)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                throw URLError(.badURL)
+            }
+        }
+
+        await viewModel.loadMessages()
+        let didStart = await viewModel.sendMessage("Third question")
+        XCTAssertTrue(didStart)
+        XCTAssertEqual(viewModel.messages.count, 4)
+
+        await viewModel.loadMessages()
+
+        XCTAssertEqual(viewModel.messages.compactMap(\.content), [
+            "First question",
+            "First answer",
+            "Third question"
+        ])
+        XCTAssertEqual(viewModel.messages.last?.messageId, "u-3")
+        XCTAssertEqual(viewModel.messagesOffset, 0)
+        XCTAssertEqual(
+            ChatViewModel.transcriptMessages(
+                from: viewModel.messages,
+                messageOffset: viewModel.messagesOffset
+            ).last?.messageId,
+            "u-3"
+        )
+    }
+
+    @MainActor
     func testLoadOlderMessagesKeepsAffordanceWhenAnotherOlderPageExists() async throws {
         let viewModel = try makeViewModel { request in
             XCTAssertEqual(request.url?.path, "/api/session")

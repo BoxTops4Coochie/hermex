@@ -1944,6 +1944,19 @@ final class ChatViewModel {
             return
         }
 
+        if let splicedMessages = Self.splicingReloadedMessages(
+            reloadedMessages,
+            intoCurrentMessages: previousMessages,
+            currentMessagesOffset: previousMessagesOffset,
+            reloadedMessagesOffset: reloadedMessagesOffset
+        ) {
+            messages = splicedMessages
+            transcriptRevision &+= 1
+            messagesOffset = previousMessagesOffset
+            hasOlderMessages = previousMessagesOffset > 0 || session?.messagesTruncated == true
+            return
+        }
+
         messages = reloadedMessages
         transcriptRevision &+= 1
         updateOlderMessagePagination(from: session, loadedMessageCount: messages.count)
@@ -2000,6 +2013,49 @@ final class ChatViewModel {
         }
 
         return Array(reloadedMessages[overlapIndex...])
+    }
+
+    /// A send's completion refresh can come back with the *same*
+    /// `_messages_offset` as the window on screen while the just-sent row is
+    /// still settling server-side — the optimistic row not persisted yet, or
+    /// the server copy replacing it at the same window start. Neither the grow
+    /// merge nor the shrink trim applies, and wholesale replacement shrinks the
+    /// transcript by the optimistic row; that count change fires the follow
+    /// scroll and re-anchors a reader mid-session.
+    ///
+    /// Splice instead: keep the current rows the reload confirms row-for-row,
+    /// adopt the reloaded rows from the first divergence (renderIDs stay
+    /// positional and the offset is unchanged, so nothing remounts), and keep
+    /// current rows past the reloaded window only while they are still local
+    /// optimistic sends awaiting persistence — a reload that drops confirmed
+    /// server rows must fall through to plain replacement. Returns nil when
+    /// the windows don't overlap cleanly.
+    nonisolated private static func splicingReloadedMessages(
+        _ reloadedMessages: [ChatMessage],
+        intoCurrentMessages currentMessages: [ChatMessage],
+        currentMessagesOffset: Int,
+        reloadedMessagesOffset: Int
+    ) -> [ChatMessage]? {
+        guard currentMessagesOffset == reloadedMessagesOffset else {
+            return nil
+        }
+
+        let commonCount = min(currentMessages.count, reloadedMessages.count)
+        var overlapCount = 0
+        while overlapCount < commonCount,
+              currentMessages[overlapCount] == reloadedMessages[overlapCount] {
+            overlapCount += 1
+        }
+
+        guard overlapCount < reloadedMessages.count else {
+            let uncoveredTail = currentMessages[overlapCount...]
+            guard uncoveredTail.allSatisfy(isLocalOptimisticUserMessage) else {
+                return nil
+            }
+            return currentMessages
+        }
+
+        return Array(currentMessages[..<overlapCount]) + Array(reloadedMessages[overlapCount...])
     }
 
     private func updateOlderMessagePagination(from session: SessionDetail?, loadedMessageCount: Int) {
