@@ -6,12 +6,17 @@ final class ChatScrollPolicyTests: XCTestCase {
         XCTAssertEqual(ChatScrollPolicy.initialTranscriptAnchor, .bottom)
     }
 
-    func testTranscriptSizeChangesStayBottomAnchoredOnlyWhileFollowingLatest() {
+    func testTranscriptSizeChangesStayBottomAnchoredOnlyWhileStreamingFollow() {
+        // Live growth a stream owns keeps a following reader pinned to the bottom.
         XCTAssertEqual(
-            ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: true),
+            ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: true, isStreaming: true),
             .bottom
         )
-        XCTAssertNil(ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: false))
+        // Without a stream a size change is a lazy-stack estimate correction;
+        // re-anchoring it yanks a reading reader to the bottom of an estimate.
+        XCTAssertNil(ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: true, isStreaming: false))
+        XCTAssertNil(ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: false, isStreaming: true))
+        XCTAssertNil(ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: false, isStreaming: false))
     }
 
     func testInitialAsyncWorkWaitsForNavigationAppearanceCompletion() {
@@ -208,14 +213,26 @@ final class ChatScrollPolicyTests: XCTestCase {
 
     func testDisclosureToggleSuspendsBottomAnchorWhileFollowing() {
         XCTAssertNil(
-            ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: true, isDisclosureSettling: true)
+            ChatScrollPolicy.sizeChangeAnchor(
+                shouldFollowLatestMessage: true,
+                isStreaming: true,
+                isDisclosureSettling: true
+            )
         )
         XCTAssertEqual(
-            ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: true, isDisclosureSettling: false),
+            ChatScrollPolicy.sizeChangeAnchor(
+                shouldFollowLatestMessage: true,
+                isStreaming: true,
+                isDisclosureSettling: false
+            ),
             .bottom
         )
         XCTAssertNil(
-            ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: false, isDisclosureSettling: false)
+            ChatScrollPolicy.sizeChangeAnchor(
+                shouldFollowLatestMessage: false,
+                isStreaming: true,
+                isDisclosureSettling: false
+            )
         )
     }
 }
