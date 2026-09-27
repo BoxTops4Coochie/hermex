@@ -265,8 +265,10 @@ final class LiveActivityTests: XCTestCase {
         let scheme = HermesDeepLink.scheme
 
         XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://session?id=x&server=%20")!))
-        // ":" can never parse as a URL in any Foundation version.
+        // ":" parses as a relative URL in some Foundation versions — the
+        // parser must still reject it: only absolute http(s) URLs with a host count.
         XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://session?id=x&server=%3A")!))
+        XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://session?id=x&server=ftp%3A%2F%2Fhost")!))
         // A non-session host must not report a server either.
         XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://new-chat")!))
     }

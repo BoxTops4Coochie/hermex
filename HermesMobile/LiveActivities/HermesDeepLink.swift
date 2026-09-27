@@ -138,7 +138,10 @@ enum HermesDeepLink {
         }
 
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let serverURL = URL(string: trimmed) else { return nil }
+        guard !trimmed.isEmpty, let serverURL = URL(string: trimmed),
+              serverURL.scheme == "https" || serverURL.scheme == "http",
+              serverURL.host != nil
+        else { return nil }
         return serverURL
     }
 
