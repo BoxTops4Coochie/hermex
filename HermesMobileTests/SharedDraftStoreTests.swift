@@ -386,6 +386,25 @@ final class SharedDraftStoreTests: XCTestCase {
         XCTAssertNil(try HermesShareDraft.loadPendingDraft(from: directory))
     }
 
+    // MARK: - Stored file name safety (sweep LOW #13)
+
+    /// `URL.lastPathComponent` of `".."` is `".."`, so the dot names must be
+    /// rejected explicitly — they'd otherwise escape the staging directory
+    /// when joined onto an attachment path.
+    func testIsSafeStoredFileNameRejectsDotNames() {
+        XCTAssertFalse(HermesShareDraft.isSafeStoredFileName(".."))
+        XCTAssertFalse(HermesShareDraft.isSafeStoredFileName("."))
+    }
+
+    func testIsSafeStoredFileNameStillAcceptsBareNamesAndRejectsPaths() {
+        XCTAssertTrue(HermesShareDraft.isSafeStoredFileName("AB12CD34.pdf"))
+        XCTAssertTrue(HermesShareDraft.isSafeStoredFileName("shared-file"))
+
+        XCTAssertFalse(HermesShareDraft.isSafeStoredFileName(""))
+        XCTAssertFalse(HermesShareDraft.isSafeStoredFileName("sub/dir.txt"))
+        XCTAssertFalse(HermesShareDraft.isSafeStoredFileName("/etc/passwd"))
+    }
+
     private func temporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

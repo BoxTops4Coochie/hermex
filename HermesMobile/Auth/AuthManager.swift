@@ -73,6 +73,10 @@ final class AuthManager {
     private let logoutTimeout: Duration
     private let serverRegistry: ServerRegistry
 
+    /// Drops the Home Screen widget's recent-chats snapshot. Injected so tests
+    /// can observe the clear; production clears the shared app-group file.
+    private let clearWidgetSnapshot: () -> Void
+
     init(
         keychain: any KeychainStoring = KeychainStore(),
         clientFactory: @escaping (URL) -> any AuthAPIClient = { APIClient(baseURL: $0) },
@@ -81,7 +85,8 @@ final class AuthManager {
         },
         headerStore: CustomHeaderStore = .shared,
         logoutTimeout: Duration = .seconds(5),
-        serverRegistry: ServerRegistry = .shared
+        serverRegistry: ServerRegistry = .shared,
+        clearWidgetSnapshot: @escaping () -> Void = { RecentChatsSnapshotStore.clear() }
     ) {
         self.keychain = keychain
         self.clientFactory = clientFactory
@@ -89,6 +94,7 @@ final class AuthManager {
         self.headerStore = headerStore
         self.logoutTimeout = logoutTimeout
         self.serverRegistry = serverRegistry
+        self.clearWidgetSnapshot = clearWidgetSnapshot
         restoreSavedServer()
         refreshServers()
     }
@@ -117,11 +123,12 @@ final class AuthManager {
         let serverURL = try Self.normalizedServerURL(from: serverURLString)
 
         // Probe through a client bound to the attempted headers (the health and
-        // auth-status calls must traverse the proxy), and only move them into
-        // the shared store once the probe succeeds — mirror of `addServer`. A
-        // failed probe or rejected URL must not leave the attempted headers
-        // live for the active server. Passing nil leaves the current headers
-        // untouched (#255).
+        // auth-status calls must traverse the proxy). The shared live store is
+        // NEVER swapped here: `state.server` still points at the previous
+        // server, so moving the attempted headers into the store would send
+        // them to the wrong origin on the next request. The store swap belongs
+        // solely to `configure`'s success path (and `addServer`). Passing nil
+        // probes with the current headers (#255).
         let client: any AuthAPIClient
         if let customHeaders {
             client = probeClientFactory(serverURL, customHeaders.sanitizedForStorage())
@@ -129,11 +136,7 @@ final class AuthManager {
             client = clientFactory(serverURL)
         }
 
-        let status = try await testConnection(client: client)
-        if let customHeaders {
-            headerStore.replace(with: customHeaders.sanitizedForStorage())
-        }
-        return status
+        return try await testConnection(client: client)
     }
 
     private func testConnection(client: any AuthAPIClient) async throws -> AuthStatusResponse {
@@ -155,12 +158,14 @@ final class AuthManager {
         do {
             // Normalize first so a bad URL fails before anything touches state.
             let serverURL = try Self.normalizedServerURL(from: serverURLString)
+            // The server that was active before this configure, so the widget
+            // snapshot can be cleared only on a real server change below.
+            let previousServer = state.server
             // Probe (and log in) through a client bound to the attempted
-            // headers — the same mirror of `addServer` as in `testConnection`:
-            // the shared store is only swapped once the whole flow succeeds, so
-            // a failed configure leaves the active server's live headers
-            // untouched while its in-flight requests keep using them. Passing
-            // nil keeps the current headers (#255).
+            // headers — the shared live store is never touched during the
+            // flow, so a failed configure leaves the active server's live
+            // headers untouched while its in-flight requests keep using them.
+            // Passing nil keeps the current headers (#255).
             let client: any AuthAPIClient
             if let customHeaders {
                 client = probeClientFactory(serverURL, customHeaders.sanitizedForStorage())
@@ -191,20 +196,26 @@ final class AuthManager {
                 }
             }
 
-            // Persist only on success: the server URL and the headers that reached it.
-            // The header-store swap is deferred to here, after validation, probe,
-            // and login all succeeded.
-            if let customHeaders {
-                headerStore.replace(with: customHeaders.sanitizedForStorage())
-            }
+            // Persist only on success. The throwing Keychain write and registry
+            // activation run first; the header-store swap moves into the live
+            // snapshot only after both succeed, so a failed save can't leave
+            // the attempted headers live for the previous server.
             try keychain.save(serverURL.absoluteString, forKey: .serverURL)
             // Record (or re-activate) this server in the multi-server registry,
             // shadowing the Keychain `server_url` write above (#15). Dedupes by
             // normalized URL.
             serverRegistry.activate(url: serverURL)
+            if let customHeaders {
+                headerStore.replace(with: customHeaders.sanitizedForStorage())
+            }
             // Persist the headers that reached this server under its own scoped key
             // so they never apply to a different server (#16).
             persistCustomHeaders(for: serverURL)
+            if previousServer != serverURL {
+                // The widget's snapshot belongs to the previous server; drop it
+                // so its rows never outlive the switch (sweep MED #3).
+                clearWidgetSnapshot()
+            }
             refreshServers()
             state = .loggedIn(server: serverURL)
         } catch {
@@ -370,6 +381,9 @@ final class AuthManager {
         // profiles, which would leak into Shortcuts / Siri if the new server's fetch is
         // delayed or fails. The new server's profiles reload on the next foreground fetch.
         ProfileEntityCache.shared.save([])
+        // The widget's snapshot belongs to the previous server; drop it so stale
+        // rows (and their session deep links) never outlive the switch (sweep MED #3).
+        clearWidgetSnapshot()
         lastErrorMessage = nil
         state = .loggedIn(server: serverURL)
     }
@@ -403,6 +417,8 @@ final class AuthManager {
         // server being removed, so they're stale whether we switch to another server (its
         // profiles reload on the next foreground fetch) or return to onboarding.
         ProfileEntityCache.shared.save([])
+        // The removed server owned the widget's snapshot; drop it (sweep MED #3).
+        clearWidgetSnapshot()
 
         let nextActive = serverRegistry.remove(id: server.absoluteString)
         refreshServers()
@@ -497,6 +513,8 @@ final class AuthManager {
         serverRegistry.forgetActiveServer()
         refreshServers()
         headerStore.replace(with: [])
+        // No active server remains, so nothing valid owns the widget snapshot.
+        clearWidgetSnapshot()
         // Drop the App Intents profile picker cache (#339) so a signed-out user doesn't see
         // the previous server's profiles lingering in Shortcuts / Siri.
         ProfileEntityCache.shared.save([])
@@ -598,6 +616,10 @@ final class AuthManager {
         }
 
         components.host = normalizedHost(components.host)
+        // Credentials pasted into the URL (`https://user:pass@host`) must not
+        // bake into the Keychain registry or surface in Settings (sweep LOW #16).
+        components.user = nil
+        components.password = nil
         components.path = ""
         components.query = nil
         components.fragment = nil

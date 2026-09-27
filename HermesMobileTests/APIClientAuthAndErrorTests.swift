@@ -69,6 +69,20 @@ final class APIClientAuthAndErrorTests: APIClientTestCase {
         )
     }
 
+    /// Credentials pasted into the server URL (`https://user:pass@host`) must
+    /// not bake into the Keychain registry or surface in Settings (sweep LOW #16).
+    func testServerURLNormalizationStripsUserInfo() throws {
+        let url = try AuthManager.normalizedServerURL(from: "https://user:secret@example.test")
+
+        XCTAssertNil(url.user)
+        XCTAssertNil(url.password)
+        XCTAssertEqual(url.absoluteString, "https://example.test")
+        XCTAssertEqual(
+            try AuthManager.normalizedServerURL(from: "https://token@example.test"),
+            URL(string: "https://example.test")
+        )
+    }
+
     @MainActor
     func testAuthManagerPreservesPasswordRequiredEmptyPasswordBehavior() async throws {
         let keychain = InMemoryKeychainStore()

@@ -2953,7 +2953,9 @@ final class SessionListMutationTests: XCTestCase {
     }
 
     func testCopyDeepLinkUsesExportAvailabilityRules() throws {
-        let session = SessionSummary(sessionId: "session & /?=✓", readOnly: true)
+        // Tricky-but-valid ID: percent-encoding still exercised (&, =, non-ASCII),
+        // but no whitespace/slash so it passes session-ID validation.
+        let session = SessionSummary(sessionId: "session-&-?=✓", readOnly: true)
 
         let url = try XCTUnwrap(
             SessionRowActionPolicy.deepLinkURL(

@@ -699,8 +699,18 @@ enum HermesShareDraft {
         return "\(UUID().uuidString).\(fileExtension)"
     }
 
-    private static func isSafeStoredFileName(_ filename: String) -> Bool {
-        !filename.isEmpty && URL(fileURLWithPath: filename).lastPathComponent == filename
+    /// A stored attachment name is safe to join onto the staging directory
+    /// only when it is a bare file name. `URL.lastPathComponent` of `".."` is
+    /// `".."`, so the dot names are rejected explicitly — they'd otherwise
+    /// escape the staging directory (sweep LOW #13). Internal so the safety
+    /// rule is directly unit-testable.
+    static func isSafeStoredFileName(_ filename: String) -> Bool {
+        guard !filename.isEmpty,
+              URL(fileURLWithPath: filename).lastPathComponent == filename
+        else {
+            return false
+        }
+        return filename != "." && filename != ".."
     }
 
     private static func inboxRootURL(in directory: URL) -> URL {

@@ -426,6 +426,46 @@ private struct UnreachableAuthAPIClient: AuthAPIClient {
     }
 }
 
+/// A keychain double whose global `server_url` save can be made to fail, so
+/// tests can exercise AuthManager's throwing-save ordering: the header-store
+/// swap must wait for the save (and registry activation) to succeed.
+private final class FailingServerURLSaveKeychainStore: KeychainStoring {
+    struct KeychainSaveFailure: Error {}
+
+    private let backing = InMemoryKeychainStore()
+    var failsServerURLSave = false
+
+    /// Convenience for assertions, mirroring `InMemoryKeychainStore`.
+    var savedValues: [KeychainStore.Key: String] { backing.savedValues }
+
+    func save(_ value: String, forKey key: KeychainStore.Key) throws {
+        if failsServerURLSave, key == .serverURL {
+            throw KeychainSaveFailure()
+        }
+        try backing.save(value, forKey: key)
+    }
+
+    func load(_ key: KeychainStore.Key) throws -> String? {
+        try backing.load(key)
+    }
+
+    func delete(_ key: KeychainStore.Key) throws {
+        try backing.delete(key)
+    }
+
+    func save(_ value: String, forKey key: KeychainStore.Key, scope: String) throws {
+        try backing.save(value, forKey: key, scope: scope)
+    }
+
+    func load(_ key: KeychainStore.Key, scope: String) throws -> String? {
+        try backing.load(key, scope: scope)
+    }
+
+    func delete(_ key: KeychainStore.Key, scope: String) throws {
+        try backing.delete(key, scope: scope)
+    }
+}
+
 @MainActor
 final class CustomHeaderAuthManagerTests: XCTestCase {
     private func makeManager(
@@ -514,12 +554,48 @@ final class CustomHeaderAuthManagerTests: XCTestCase {
         XCTAssertNil(keychain.scopedValue(.customHeaders, scope: "https://proxy.test"))
     }
 
-    /// `testConnection` applies the attempted headers only after the probe
-    /// succeeds — and never persists them (that's `configure`'s job).
-    func testTestConnectionAppliesAttemptedHeadersOnlyOnSuccess() async throws {
+    /// The header-store swap in `configure` runs only after the throwing
+    /// Keychain write and registry activation succeed: a failed save must leave
+    /// the live store (and the active server) untouched (sweep MED #1).
+    func testConfigureSwapsHeaderStoreOnlyAfterKeychainSaveSucceeds() async throws {
+        let keychain = FailingServerURLSaveKeychainStore()
+        keychain.failsServerURLSave = true
+        let store = CustomHeaderStore()
+        store.replace(with: [CustomHeader(name: "X-Old", value: "keep")])
+        let client = MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: false))
+        let manager = makeManager(keychain: keychain, store: store, client: client)
+
+        await manager.configure(
+            serverURLString: "https://proxy.test",
+            password: "",
+            customHeaders: [CustomHeader(name: "X-New", value: "swap")]
+        )
+
+        XCTAssertNotNil(manager.lastErrorMessage)
+        XCTAssertEqual(store.snapshot().map(\.value), ["keep"])
+        XCTAssertEqual(manager.state, .unconfigured)
+        XCTAssertNil(keychain.savedValues[.serverURL])
+
+        // Once the save succeeds, the swap happens and the server becomes active.
+        keychain.failsServerURLSave = false
+        await manager.configure(
+            serverURLString: "https://proxy.test",
+            password: "",
+            customHeaders: [CustomHeader(name: "X-New", value: "swap")]
+        )
+
+        XCTAssertEqual(store.snapshot().map(\.value), ["swap"])
+        XCTAssertEqual(manager.state, .loggedIn(server: try XCTUnwrap(URL(string: "https://proxy.test"))))
+    }
+
+    /// `testConnection` probes through a client bound to the attempted headers
+    /// and NEVER swaps the live store: `state.server` still points at the
+    /// previous server during a probe, so a swap would send the attempted
+    /// headers to the wrong origin on the next request (sweep MED #1).
+    func testTestConnectionDoesNotSwapLiveHeaderStore() async throws {
         let keychain = InMemoryKeychainStore()
         let store = CustomHeaderStore()
-        store.replace(with: [CustomHeader(name: "X-Old", value: "old")])
+        store.replace(with: [CustomHeader(name: "X-Old", value: "keep")])
         let client = MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: false))
         let manager = makeManager(keychain: keychain, store: store, client: client)
 
@@ -528,7 +604,7 @@ final class CustomHeaderAuthManagerTests: XCTestCase {
             customHeaders: [CustomHeader(name: "Authorization", value: "Bearer abc")]
         )
 
-        XCTAssertEqual(store.snapshot().map(\.name), ["Authorization"])
+        XCTAssertEqual(store.snapshot().map(\.value), ["keep"])
         XCTAssertNil(keychain.savedValues[.serverURL])
         XCTAssertEqual(manager.state, .unconfigured)
     }

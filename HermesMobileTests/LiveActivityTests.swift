@@ -205,14 +205,82 @@ final class LiveActivityTests: XCTestCase {
     }
 
     func testSessionDeepLinkURLPercentEncodesSessionID() throws {
-        let sessionID = "session & /?=✓"
+        // Valid IDs still ride percent-encoded: `&`, `=`, `+`, `?`, and
+        // non-ASCII survive the query-item round trip without breaking it.
+        let sessionID = "session&=+?✓"
         let url = try XCTUnwrap(HermesDeepLink.sessionURL(sessionID: sessionID))
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
 
         XCTAssertEqual(url.scheme, HermesDeepLink.scheme)
         XCTAssertEqual(url.host, "session")
-        XCTAssertEqual(components?.queryItems, [URLQueryItem(name: "id", value: sessionID)])
+        XCTAssertEqual(components?.queryItems?.first, URLQueryItem(name: "id", value: sessionID))
         XCTAssertFalse(url.absoluteString.contains(sessionID))
+    }
+
+    // MARK: - Session ID validation (sweep LOW #18)
+
+    func testSessionDeepLinkRejectsIDsThatCannotNameARealSession() {
+        XCTAssertNil(HermesDeepLink.sessionURL(sessionID: ""))
+        XCTAssertNil(HermesDeepLink.sessionURL(sessionID: "   "))
+        XCTAssertNil(HermesDeepLink.sessionURL(sessionID: "session & /?=✓"))
+        XCTAssertNil(HermesDeepLink.sessionURL(sessionID: "../../etc/passwd"))
+        XCTAssertNil(HermesDeepLink.sessionURL(sessionID: "back\\slash"))
+        XCTAssertNil(HermesDeepLink.sessionURL(sessionID: String(repeating: "a", count: 129)))
+        XCTAssertEqual(HermesDeepLink.sessionURL(sessionID: String(repeating: "a", count: 128))?.host, "session")
+    }
+
+    func testSessionIDParserRejectsTheSameIDsItBuilds() throws {
+        let scheme = HermesDeepLink.scheme
+
+        XCTAssertNil(HermesDeepLink.sessionID(from: URL(string: "\(scheme)://session?id=bad%20id")!))
+        XCTAssertNil(HermesDeepLink.sessionID(from: URL(string: "\(scheme)://session?id=..%2F..%2Fetc")!))
+        XCTAssertEqual(HermesDeepLink.sessionID(from: URL(string: "\(scheme)://session?id=abc123")!), "abc123")
+    }
+
+    // MARK: - Server-scoped session links (sweep MED #3)
+
+    func testSessionDeepLinkCarriesServerQueryItem() throws {
+        let server = try XCTUnwrap(URL(string: "https://hermes.example.com"))
+        let url = try XCTUnwrap(HermesDeepLink.sessionURL(sessionID: "session-abc", serverURL: server))
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+
+        XCTAssertEqual(
+            components?.queryItems,
+            [
+                URLQueryItem(name: "id", value: "session-abc"),
+                URLQueryItem(name: HermesDeepLink.serverQueryItem, value: server.absoluteString)
+            ]
+        )
+        XCTAssertEqual(HermesDeepLink.serverURL(from: url), server)
+        XCTAssertEqual(HermesDeepLink.sessionID(from: url), "session-abc")
+    }
+
+    func testSessionDeepLinkWithoutServerItemReportsNoServer() throws {
+        let url = try XCTUnwrap(HermesDeepLink.sessionURL(sessionID: "session-abc"))
+
+        XCTAssertNil(HermesDeepLink.serverURL(from: url))
+    }
+
+    func testServerParserIgnoresGarbageServerItems() throws {
+        let scheme = HermesDeepLink.scheme
+
+        XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://session?id=x&server=%20")!))
+        // ":" parses as a relative URL in some Foundation versions — the
+        // parser must still reject it: only absolute http(s) URLs with a host count.
+        XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://session?id=x&server=%3A")!))
+        XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://session?id=x&server=ftp%3A%2F%2Fhost")!))
+        // A non-session host must not report a server either.
+        XCTAssertNil(HermesDeepLink.serverURL(from: URL(string: "\(scheme)://new-chat")!))
+    }
+
+    func testCarriesServerItemDistinguishesAbsentFromUnusable() throws {
+        let scheme = HermesDeepLink.scheme
+
+        XCTAssertFalse(HermesDeepLink.carriesServerItem(URL(string: "\(scheme)://session?id=x")!))
+        // Present but unusable: the caller must drop the link, not open it unvalidated.
+        XCTAssertTrue(HermesDeepLink.carriesServerItem(URL(string: "\(scheme)://session?id=x&server=not%20a%20url")!))
+        XCTAssertTrue(HermesDeepLink.carriesServerItem(URL(string: "\(scheme)://session?id=x&server=https%3A%2F%2Fhermes.example.com")!))
+        XCTAssertFalse(HermesDeepLink.carriesServerItem(URL(string: "\(scheme)://new-chat")!))
     }
 
     func testChatViewModelLiveActivityLifecycleUsesInjectedManager() async throws {

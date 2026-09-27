@@ -119,6 +119,31 @@ final class RecentChatsSnapshotTests: XCTestCase {
         XCTAssertTrue(RecentChatsSnapshotStore.write(changed, to: fileURL))
     }
 
+    // MARK: - Server isolation (sweep MED #3)
+
+    /// The snapshot file is one fixed name shared by every server, so the
+    /// clear-on-switch/logout path must actually remove it — otherwise the
+    /// widget keeps rendering the previous server's rows until the new
+    /// server's first list load lands.
+    func testClearDeletesSnapshotFile() throws {
+        let snapshot = RecentChatsSnapshotStore.makeSnapshot(
+            from: [RecentChatsSnapshot.Entry(sessionId: "s-1", title: "Fix the build", updatedAt: Date(timeIntervalSince1970: 1_700))],
+            serverURL: "https://hermes.example.com"
+        )
+        XCTAssertTrue(RecentChatsSnapshotStore.write(snapshot, to: fileURL))
+        XCTAssertNotNil(RecentChatsSnapshotStore.load(from: fileURL))
+
+        RecentChatsSnapshotStore.clear(fileURL: fileURL)
+
+        XCTAssertNil(RecentChatsSnapshotStore.load(from: fileURL))
+    }
+
+    func testClearOfMissingFileIsNoOp() {
+        RecentChatsSnapshotStore.clear(fileURL: fileURL)
+
+        XCTAssertNil(RecentChatsSnapshotStore.load(from: fileURL))
+    }
+
     // MARK: - Widget content rendering
 
     func testMediumContentViewRendersSampleRows() throws {

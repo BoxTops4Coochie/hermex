@@ -115,6 +115,70 @@ final class ShareInputReaderTests: XCTestCase {
         XCTAssertEqual(input.attachments.first?.typeIdentifier, UTType.plainText.identifier)
     }
 
+    // MARK: - Attachment type allowlist (sweep LOW #14)
+
+    /// A file whose type is outside the allowlist (images, PDFs, text, movies,
+    /// audio) is skipped before its bytes are read, so a hostile host app can't
+    /// stage arbitrary binaries for auto-upload.
+    func testDisallowedFileTypeIsSkipped() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let zipURL = directory.appendingPathComponent("payload.zip")
+        try Data("not really a zip".utf8).write(to: zipURL)
+
+        let provider = NSItemProvider(item: zipURL as NSURL, typeIdentifier: UTType.fileURL.identifier)
+
+        let input = await ShareInputReader.input(from: [provider])
+
+        XCTAssertTrue(input.attachments.isEmpty, "archives are not an accepted share attachment type")
+    }
+
+    func testMovieFileIsStagedThroughExtensionFallback() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movieURL = directory.appendingPathComponent("clip.mp4")
+        let payload = Data("movie bytes".utf8)
+        try payload.write(to: movieURL)
+
+        let provider = NSItemProvider(item: movieURL as NSURL, typeIdentifier: UTType.fileURL.identifier)
+
+        let input = await ShareInputReader.input(from: [provider])
+
+        XCTAssertEqual(input.attachments.count, 1)
+        XCTAssertEqual(input.attachments.first?.filename, "clip.mp4")
+        XCTAssertEqual(input.attachments.first?.data, payload)
+        XCTAssertEqual(input.attachments.first?.typeIdentifier, UTType(filenameExtension: "mp4")?.identifier)
+    }
+
+    // MARK: - Staged text cap (sweep LOW #15)
+
+    /// Text shares are bounded by the same 20 MB cap as attachments; a larger
+    /// text item is dropped with the same semantics as an oversized attachment.
+    func testOversizedTextIsDropped() async {
+        let oversized = String(repeating: "a", count: HermesShareDraft.maximumSharedAttachmentBytes + 1)
+        let provider = NSItemProvider(item: oversized as NSString, typeIdentifier: UTType.plainText.identifier)
+
+        let input = await ShareInputReader.input(from: [provider])
+
+        XCTAssertTrue(input.textSnippets.isEmpty)
+        XCTAssertTrue(input.attachments.isEmpty)
+    }
+
+    func testTextAtTheCapIsKept() async {
+        let atCap = String(repeating: "a", count: HermesShareDraft.maximumSharedAttachmentBytes)
+        let provider = NSItemProvider(item: atCap as NSString, typeIdentifier: UTType.plainText.identifier)
+
+        let input = await ShareInputReader.input(from: [provider])
+
+        XCTAssertEqual(input.textSnippets, [atCap])
+    }
+
     // MARK: - Filename fallbacks
 
     func testAttachmentFilenameFallsBackToTypeBasedName() async {

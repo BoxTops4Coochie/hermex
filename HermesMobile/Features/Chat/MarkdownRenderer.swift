@@ -365,6 +365,8 @@ private struct ChatMarkdownView: View {
 
     var body: some View {
         Markdown(content)
+            .markdownImageProvider(HermesMarkdownImageProvider())
+            .markdownInlineImageProvider(HermesMarkdownInlineImageProvider())
             .markdownTheme(MarkdownUI.Theme.chat(colorScheme: colorScheme, isStreaming: isStreaming))
             .markdownTextStyle {
                 ForegroundColor(.primary)
@@ -382,6 +384,121 @@ private struct ChatMarkdownView: View {
                     .relativeLineSpacing(.em(0.18))
                     .markdownMargin(top: 0, bottom: 8)
             }
+    }
+}
+
+/// Pure allow/deny decision for a markdown image reference (sweep MED #2/#4).
+/// Agent-emitted markdown is attacker-influenced input, and MarkdownUI's
+/// default providers fetch every remote URL on each render — a tracking beacon
+/// keyed to the device IP, and an unbounded download on a hostile URL. Only a
+/// local `file:` reference may resolve; every remote source — including
+/// same-origin `/api/media`, whose bounded `downloadData` path isn't reachable
+/// from a provider — renders the unavailable-media placeholder instead. Server
+/// media arrives through the transcript's bounded `MEDIA:` pipeline, which this
+/// policy must not touch.
+enum MarkdownImageFetchPolicy {
+    enum Decision: Equatable {
+        case loadLocalFile(path: String)
+        case placeholder
+    }
+
+    /// Caps a local file read so a giant on-disk image can't be decoded whole.
+    static let maxLocalImageBytes = 20 * 1_024 * 1_024
+
+    static func decision(forURL url: URL?) -> Decision {
+        guard let url, url.isFileURL, !url.path.isEmpty else {
+            return .placeholder
+        }
+        return .loadLocalFile(path: url.path)
+    }
+}
+
+/// The one block-image provider for every agent-rendered markdown surface
+/// (chat transcript, Kanban cards): it never touches the network. Local file
+/// references load from disk under the policy's cap; anything else renders the
+/// same unavailable-media chip the transcript uses.
+struct HermesMarkdownImageProvider: MarkdownUI.ImageProvider {
+    func makeImage(url: URL?) -> some View {
+        MarkdownImagePlaceholderView(sourceName: Self.displayName(for: url))
+    }
+
+    /// Chip title: the file name when there is one, else the host, else generic.
+    static func displayName(for url: URL?) -> String {
+        guard let url else { return String(localized: "Image") }
+        let fileName = url.lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fileName.isEmpty, fileName != "/" {
+            return fileName
+        }
+        if let host = url.host, !host.isEmpty {
+            return host
+        }
+        return String(localized: "Image")
+    }
+}
+
+/// Inline markdown images never fetch either: a local file loads under the
+/// same policy, everything else throws so MarkdownUI omits the image rather
+/// than rendering it.
+struct HermesMarkdownInlineImageProvider: MarkdownUI.InlineImageProvider {
+    struct BlockedError: Error {}
+
+    func image(with url: URL, label: String) async throws -> SwiftUI.Image {
+        switch MarkdownImageFetchPolicy.decision(forURL: url) {
+        case .placeholder:
+            throw BlockedError()
+        case .loadLocalFile(let path):
+            guard let image = Self.cappedLocalImage(at: path) else {
+                throw BlockedError()
+            }
+            return SwiftUI.Image(uiImage: image)
+        }
+    }
+
+    private static func cappedLocalImage(at path: String) -> UIImage? {
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+           let size = (attributes[.size] as? NSNumber)?.intValue,
+           size > MarkdownImageFetchPolicy.maxLocalImageBytes {
+            return nil
+        }
+        return UIImage(contentsOfFile: path)
+    }
+}
+
+/// The unavailable-media placeholder for blocked markdown image sources,
+/// mirroring `TranscriptMediaUnavailableChip`'s styling.
+private struct MarkdownImagePlaceholderView: View {
+    let sourceName: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            SwiftUI.Image(systemName: "photo")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SwiftUI.Color(.secondaryLabel))
+
+            VStack(alignment: .leading, spacing: 2) {
+                SwiftUI.Text(verbatim: sourceName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SwiftUI.Color(.label))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                SwiftUI.Text("Media unavailable")
+                    .font(.caption2)
+                    .foregroundStyle(SwiftUI.Color(.secondaryLabel))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 240, alignment: .leading)
+        .background(SwiftUI.Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(SwiftUI.Color(.separator).opacity(0.35), lineWidth: 0.5)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "Media unavailable \(sourceName)"))
     }
 }
 

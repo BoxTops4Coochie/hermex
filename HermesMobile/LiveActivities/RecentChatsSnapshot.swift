@@ -21,9 +21,10 @@ struct RecentChatsSnapshot: Codable, Equatable {
     }
 
     let version: Int?
-    /// Absolute URL string of the server the rows came from. Set only when
-    /// more than one server is configured, so the widget can say where its
-    /// rows live (single-server installs are unambiguous).
+    /// Absolute URL string of the server the rows came from. The writer always
+    /// sets it so widget rows can carry it on their session deep links and the
+    /// app can drop taps that resolve against a different active server
+    /// (sweep MED #3).
     let serverURL: String?
     let generatedAt: Date?
     let sessions: [Entry]?
@@ -86,9 +87,11 @@ enum RecentChatsSnapshotStore {
         )
     }
 
-    /// Writes the snapshot atomically. Returns true when the file's content
-    /// actually changed, so callers can skip the WidgetKit timeline reload
-    /// when a refresh carried the same sessions as before.
+    /// Writes the snapshot atomically with full at-rest file protection, so the
+    /// widget data is unreadable before first unlock (matches the share-inbox
+    /// writers; sweep LOW #19). Returns true when the file's content actually
+    /// changed, so callers can skip the WidgetKit timeline reload when a
+    /// refresh carried the same sessions as before.
     @discardableResult
     static func write(_ snapshot: RecentChatsSnapshot, to fileURL: URL? = nil) -> Bool {
         guard let fileURL = fileURL ?? defaultFileURL else { return false }
@@ -101,11 +104,21 @@ enum RecentChatsSnapshotStore {
 
         do {
             let data = try JSONEncoder().encode(snapshot)
-            try data.write(to: fileURL, options: [.atomic])
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             return true
         } catch {
             return false
         }
+    }
+
+    /// Deletes the snapshot file and reloads the widget, so rows rendered for a
+    /// previous server (or a signed-out state) never linger. Called when the
+    /// active server switches or is signed out; the next session-list load
+    /// writes a fresh snapshot for the new server.
+    static func clear(fileURL: URL? = nil) {
+        guard let fileURL = fileURL ?? defaultFileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
+        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
     }
 
     /// nil when nothing was written yet (fresh install) or the file is
@@ -147,7 +160,7 @@ struct RecentChatsWidgetContentView: View {
                 emptyState
             } else {
                 ForEach(Array(sessions)) { entry in
-                    RecentChatsWidgetRowView(entry: entry)
+                    RecentChatsWidgetRowView(entry: entry, serverURL: snapshot?.serverURL)
                 }
             }
         }
@@ -180,8 +193,8 @@ struct RecentChatsWidgetContentView: View {
         .padding(.bottom, 2)
     }
 
-    /// Shown only for multi-server setups (the snapshot omits the server for
-    /// single-server installs), so rows always say where they came from.
+    /// Shown for every snapshot: the writer always records the server the rows
+    /// came from, so rows always say where they came from.
     private var serverHostLabel: String? {
         guard let serverURL = snapshot?.serverURL else { return nil }
         return URL(string: serverURL)?.host
@@ -197,13 +210,17 @@ struct RecentChatsWidgetContentView: View {
 
 struct RecentChatsWidgetRowView: View {
     let entry: RecentChatsSnapshot.Entry
+    /// The server the snapshot's rows came from; rides on the deep link so the
+    /// app can drop taps that resolve against a different active server
+    /// (sweep MED #3).
+    var serverURL: String?
 
     var body: some View {
         // WidgetKit's multi-destination tap target: each row carries its own
         // session deep link (`Link`, not `widgetURL`, which is one-per-widget).
         // A row that somehow decodes without a usable session id still renders,
         // just without a tap destination.
-        if let linkURL = HermesDeepLink.sessionURL(sessionID: entry.sessionId ?? "") {
+        if let linkURL = sessionLinkURL {
             Link(destination: linkURL) {
                 rowContent
             }
@@ -211,6 +228,13 @@ struct RecentChatsWidgetRowView: View {
         } else {
             rowContent
         }
+    }
+
+    private var sessionLinkURL: URL? {
+        guard let serverURL, let server = URL(string: serverURL) else {
+            return HermesDeepLink.sessionURL(sessionID: entry.sessionId ?? "")
+        }
+        return HermesDeepLink.sessionURL(sessionID: entry.sessionId ?? "", serverURL: server)
     }
 
     private var rowContent: some View {
