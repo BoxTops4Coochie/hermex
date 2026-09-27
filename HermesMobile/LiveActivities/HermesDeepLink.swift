@@ -184,7 +184,8 @@ enum HermesDeepLink {
         let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmed.isEmpty,
               trimmed.count <= maxSessionIDLength,
-              !trimmed.contains(where: { $0.isWhitespace || $0.isNewline || $0.unicodeScalars.contains(where: { $0.properties.isControl }) }),
+              !trimmed.contains(where: { $0.isWhitespace || $0.isNewline }),
+              !trimmed.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
               !trimmed.contains("/"),
               !trimmed.contains("\\")
         else {
