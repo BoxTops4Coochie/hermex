@@ -27,6 +27,13 @@ struct ContentView: View {
                 // Warm launch: the intent set the deep link after the view appeared.
                 drainPendingIntentDeepLink()
             }
+            .onChange(of: authManager.state) { _, _ in
+                // A pending deep-linked session is only valid for the server it
+                // was linked against: an auth or server change before the
+                // session list consumes it invalidates the pending ID, so it
+                // can't open under different credentials (sweep MED #3, LOW #11).
+                pendingDeepLinkedSessionID = nil
+            }
             .task {
                 // #246: on cold launch, end any Live Activity left "running" by a
                 // run that finished while the app was terminated. #248: this is also
@@ -104,6 +111,20 @@ struct ContentView: View {
         }
 
         if let sessionID = HermesDeepLink.sessionID(from: url) {
+            // A widget row's link carries the server its snapshot came from.
+            // The session opens only while that server is still the active one,
+            // so a stale row can never resolve its session ID under another
+            // server's credentials (sweep MED #3). Links without a server item
+            // (Live Activity taps, in-app links) keep the prior behavior, and a
+            // present-but-unusable server item is dropped rather than opened
+            // unvalidated.
+            if HermesDeepLink.carriesServerItem(url) {
+                guard let linkedServer = HermesDeepLink.serverURL(from: url),
+                      let normalizedLinkedServer = try? AuthManager.normalizedServerURL(from: linkedServer.absoluteString),
+                      normalizedLinkedServer == authManager.state.server else {
+                    return
+                }
+            }
             pendingDeepLinkedSessionID = sessionID
             return
         }

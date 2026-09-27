@@ -1251,11 +1251,12 @@ final class SessionListViewModel {
                     updatedAt: Date(timeIntervalSince1970: Self.timestamp(for: session))
                 )
             }
-        // Multi-server installs get a server label in the widget header. The
-        // deep link still opens against the app's currently-active server —
-        // the session deep link has no server parameter (same as Live
-        // Activity taps), so that's the documented limitation.
-        let serverURLString = ServerRegistry.shared.servers.count > 1 ? server.absoluteString : nil
+        // The snapshot always records the server its rows came from: the widget
+        // header shows the host, and each row's deep link carries it so the app
+        // can drop taps that resolve against a different active server. The
+        // snapshot file is cleared on server switch/logout, so a stale file can
+        // never show another server's rows either (sweep MED #3).
+        let serverURLString = server.absoluteString
 
         Task.detached(priority: .utility) {
             let snapshot = RecentChatsSnapshotStore.makeSnapshot(from: entries, serverURL: serverURLString)

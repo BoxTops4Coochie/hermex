@@ -69,6 +69,21 @@ enum ShareInputReader {
     }
 
     private static func loadText(from provider: NSItemProvider) async -> String? {
+        guard let text = await rawText(from: provider) else {
+            return nil
+        }
+
+        // Cap staged text at the same 20 MB bound as attachments, so a
+        // multi-gigabyte text item is dropped instead of loaded into the app
+        // group wholesale (sweep LOW #15).
+        guard text.utf8.count <= HermesShareDraft.maximumSharedAttachmentBytes else {
+            return nil
+        }
+
+        return text
+    }
+
+    private static func rawText(from provider: NSItemProvider) async -> String? {
         let typeIdentifier = [UTType.plainText.identifier, UTType.text.identifier]
             .first { provider.hasItemConformingToTypeIdentifier($0) }
 
@@ -142,12 +157,30 @@ enum ShareInputReader {
         )
     }
 
+    /// The attachment types the server accepts and the share extension may
+    /// stage: images, PDFs, text, movies, and audio. Everything else —
+    /// arbitrary binaries, archives, executables — is skipped rather than
+    /// staged for auto-upload on next open (sweep LOW #14).
+    private static func isAllowedAttachmentType(_ type: UTType) -> Bool {
+        type.conforms(to: .image)
+            || type.conforms(to: .pdf)
+            || type.conforms(to: .text)
+            || type.conforms(to: .movie)
+            || type.conforms(to: .audio)
+    }
+
     private static func attachment(from url: URL, provider: NSItemProvider) throws -> SharedAttachmentImport? {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
         defer {
             if didStartAccessing {
                 url.stopAccessingSecurityScopedResource()
             }
+        }
+
+        // The allowlist gates the read itself: a disallowed item is skipped
+        // before its bytes are loaded off disk.
+        guard let typeIdentifier = attachmentTypeIdentifier(from: provider, fallbackURL: url) else {
+            return nil
         }
 
         if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
@@ -160,7 +193,6 @@ enum ShareInputReader {
             return nil
         }
 
-        let typeIdentifier = attachmentTypeIdentifier(from: provider, fallbackURL: url)
         let filename = url.lastPathComponent.isEmpty
             ? fallbackFilename(for: provider, typeIdentifier: typeIdentifier)
             : url.lastPathComponent
@@ -201,10 +233,21 @@ enum ShareInputReader {
     }
 
     private static func attachmentTypeIdentifier(from provider: NSItemProvider, fallbackURL: URL) -> String? {
-        provider.registeredTypeIdentifiers.first { identifier in
+        if let identifier = provider.registeredTypeIdentifiers.first(where: { identifier in
             guard let type = UTType(identifier) else { return false }
-            return type != .fileURL && (type.conforms(to: .image) || type.conforms(to: .pdf) || type.conforms(to: .data))
-        } ?? UTType(filenameExtension: fallbackURL.pathExtension)?.identifier
+            return type != .fileURL && isAllowedAttachmentType(type)
+        }) {
+            return identifier
+        }
+
+        // Fallback extension mapping: a file whose registered types don't
+        // advertise an allowed type is admitted only when its extension maps
+        // to one (e.g. a text file registered only as `fileURL`/`data`).
+        guard let type = UTType(filenameExtension: fallbackURL.pathExtension),
+              isAllowedAttachmentType(type) else {
+            return nil
+        }
+        return type.identifier
     }
 
     private static func fallbackFilename(for provider: NSItemProvider, typeIdentifier: String?) -> String {

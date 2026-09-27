@@ -238,6 +238,67 @@ final class AuthManagerStateTests: XCTestCase {
         XCTAssertEqual(manager.activeServerID, "https://b.test")
     }
 
+    // MARK: - Widget snapshot server isolation (sweep MED #3)
+
+    func testSwitchActiveServerClearsWidgetSnapshot() async throws {
+        let keychain = InMemoryKeychainStore()
+        let registry = ServerRegistry.inMemory(keychain: keychain)
+        var snapshotClearCount = 0
+        let (manager, _, bAccount) = try await makeTwoServerManager(
+            keychain: keychain,
+            registry: registry,
+            clearWidgetSnapshot: { snapshotClearCount += 1 }
+        )
+        // The helper's own configure (first sign-in) already cleared once.
+        let clearsBeforeSwitch = snapshotClearCount
+
+        manager.switchActiveServer(to: bAccount)
+
+        XCTAssertEqual(
+            snapshotClearCount - clearsBeforeSwitch,
+            1,
+            "switching servers must drop the previous server's widget snapshot"
+        )
+    }
+
+    func testSignOutClearsWidgetSnapshot() async throws {
+        let keychain = InMemoryKeychainStore()
+        var snapshotClearCount = 0
+        let manager = try await makeLoggedInManager(
+            keychain: keychain,
+            serverURLString: "https://example.test",
+            clearWidgetSnapshot: { snapshotClearCount += 1 }
+        )
+        let clearsBeforeSignOut = snapshotClearCount
+
+        await manager.signOut()
+
+        XCTAssertEqual(
+            snapshotClearCount - clearsBeforeSignOut,
+            1,
+            "sign-out must drop the signed-out server's widget snapshot"
+        )
+    }
+
+    func testConfigureDifferentServerClearsWidgetSnapshot() async throws {
+        let keychain = InMemoryKeychainStore()
+        let registry = ServerRegistry.inMemory(keychain: keychain)
+        var snapshotClearCount = 0
+        let (manager, _, _) = try await makeTwoServerManager(
+            keychain: keychain,
+            registry: registry,
+            clearWidgetSnapshot: { snapshotClearCount += 1 }
+        )
+        let clearsBeforeConfigure = snapshotClearCount
+
+        // Logging in to a server other than the previously active one is a
+        // switch as far as the widget is concerned.
+        await manager.configure(serverURLString: "https://c.test", password: "")
+
+        XCTAssertEqual(manager.state, .loggedIn(server: try XCTUnwrap(URL(string: "https://c.test"))))
+        XCTAssertEqual(snapshotClearCount - clearsBeforeConfigure, 1)
+    }
+
     func testSwitchToTheAlreadyActiveServerIsANoOp() async throws {
         let keychain = InMemoryKeychainStore()
         let registry = ServerRegistry.inMemory(keychain: keychain)
@@ -466,14 +527,16 @@ final class AuthManagerStateTests: XCTestCase {
     /// `b.test` present but inactive. Returns the manager and both accounts.
     private func makeTwoServerManager(
         keychain: InMemoryKeychainStore,
-        registry: ServerRegistry
+        registry: ServerRegistry,
+        clearWidgetSnapshot: @escaping () -> Void = {}
     ) async throws -> (AuthManager, ServerAccount, ServerAccount) {
         // Pre-seed B (becomes inactive once A signs in), then sign in to A.
         registry.activate(url: try XCTUnwrap(URL(string: "https://b.test")))
         let manager = AuthManager(
             keychain: keychain,
             clientFactory: { _ in MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: false)) },
-            serverRegistry: registry
+            serverRegistry: registry,
+            clearWidgetSnapshot: clearWidgetSnapshot
         )
         await manager.configure(serverURLString: "https://a.test", password: "")
 
@@ -491,7 +554,8 @@ final class AuthManagerStateTests: XCTestCase {
         keychain: InMemoryKeychainStore,
         serverURLString: String,
         client providedClient: MockAuthAPIClient? = nil,
-        logoutTimeout: Duration = .seconds(5)
+        logoutTimeout: Duration = .seconds(5),
+        clearWidgetSnapshot: @escaping () -> Void = {}
     ) async throws -> AuthManager {
         let client = providedClient
             ?? MockAuthAPIClient(authStatus: AuthStatusResponse(authEnabled: true, loggedIn: false))
@@ -499,7 +563,8 @@ final class AuthManagerStateTests: XCTestCase {
             keychain: keychain,
             clientFactory: { _ in client },
             logoutTimeout: logoutTimeout,
-            serverRegistry: ServerRegistry.inMemory()
+            serverRegistry: ServerRegistry.inMemory(),
+            clearWidgetSnapshot: clearWidgetSnapshot
         )
 
         await manager.configure(serverURLString: serverURLString, password: "secret")

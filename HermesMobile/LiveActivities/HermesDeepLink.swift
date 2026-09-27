@@ -88,18 +88,72 @@ enum HermesDeepLink {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// Query item carrying the server a session link was rendered for, so the
+    /// app can drop links that point at a server other than the now-active one
+    /// (sweep MED #3).
+    static let serverQueryItem = "server"
+
+    /// Longest session ID the app will build or parse a link for. Server IDs
+    /// are short opaque tokens (12-char hex upstream); anything longer can't
+    /// name a real session.
+    private static let maxSessionIDLength = 128
+
+    /// `hermes-agent://session?id=<id>` — no server item, so the link opens
+    /// against whichever server is active (Live Activity taps, in-app links).
     static func sessionURL(sessionID: String) -> URL? {
-        guard !sessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        sessionURL(sessionID: sessionID, serverURL: nil)
+    }
+
+    /// `hermes-agent://session?id=<id>&server=<server>` — the `server` item
+    /// lets the app verify the link still targets the active server before
+    /// opening it (widget snapshot rows). Both values ride percent-encoded.
+    static func sessionURL(sessionID: String, serverURL: URL?) -> URL? {
+        guard let sessionID = normalizedSessionID(sessionID) else {
             return nil
         }
 
         var components = URLComponents()
         components.scheme = scheme
         components.host = sessionHost
-        components.queryItems = [
-            URLQueryItem(name: "id", value: sessionID)
-        ]
+        var queryItems = [URLQueryItem(name: "id", value: sessionID)]
+        if let serverURL {
+            queryItems.append(URLQueryItem(name: serverQueryItem, value: serverURL.absoluteString))
+        }
+        components.queryItems = queryItems
         return components.url
+    }
+
+    /// The server a session link was rendered for, or nil when the link carries
+    /// no (usable) `server` item.
+    static func serverURL(from url: URL) -> URL? {
+        guard url.scheme?.lowercased() == scheme,
+              url.host?.lowercased() == sessionHost
+        else {
+            return nil
+        }
+
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        guard let rawValue = components?.queryItems?.first(where: { $0.name == serverQueryItem })?.value else {
+            return nil
+        }
+
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let serverURL = URL(string: trimmed) else { return nil }
+        return serverURL
+    }
+
+    /// Whether the link carries a `server` query item at all — even an
+    /// unusable one. A present-but-unparseable item can't be validated, so
+    /// callers must drop the link rather than open it unvalidated.
+    static func carriesServerItem(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == scheme,
+              url.host?.lowercased() == sessionHost
+        else {
+            return false
+        }
+
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        return components?.queryItems?.contains { $0.name == serverQueryItem } ?? false
     }
 
     static func sessionID(from url: URL) -> String? {
@@ -122,8 +176,20 @@ enum HermesDeepLink {
         return normalizedSessionID(pathID)
     }
 
+    /// Session IDs are server-generated opaque tokens. An ID carrying
+    /// whitespace, control characters, or path separators can't name a real
+    /// session, so it's dropped instead of resolved into a wrong-session
+    /// lookup (sweep LOW #18).
     private static func normalizedSessionID(_ rawValue: String?) -> String? {
         let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
+        guard !trimmed.isEmpty,
+              trimmed.count <= maxSessionIDLength,
+              !trimmed.contains(where: { $0.isWhitespace || $0.isNewline || $0.isControl }),
+              !trimmed.contains("/"),
+              !trimmed.contains("\\")
+        else {
+            return nil
+        }
+        return trimmed
     }
 }
