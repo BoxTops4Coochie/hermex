@@ -423,6 +423,14 @@ final class ChatScrollPositionController {
     /// makes from inside the content-size setter, before that callback runs.
     private var contentSizeChangedThisTurn = false
     private var lastObservedContentHeight: CGFloat?
+    /// Pending retry for an exact bottom landing requested before the scroll
+    /// view was attached or laid out. Deliberately outside the preservation
+    /// machinery: the first `attach(to:)` runs `cancelPreservation()`, and that
+    /// must not kill a landing still waiting for the scroll view to appear.
+    private var exactBottomRetryWorkItem: DispatchWorkItem?
+    /// Attempts consumed by the current exact-bottom request. Internal so
+    /// tests can assert the retry pass is bounded.
+    private(set) var exactBottomAttemptCount = 0
 
     var isHoldingPosition: Bool {
         mode == .hold && baselineOffsetY != nil
@@ -436,6 +444,7 @@ final class ChatScrollPositionController {
 
     func detach() {
         cancelPreservation()
+        cancelExactBottomRetry()
         scrollView = nil
     }
 
@@ -531,6 +540,74 @@ final class ChatScrollPositionController {
     func releaseHold() {
         guard mode == .hold else { return }
         cancelPreservation()
+    }
+
+    // MARK: Exact bottom landing
+
+    /// The most attempts an exact bottom landing makes while the scroll view
+    /// is not attached or not yet laid out. Bounded on purpose: the request
+    /// gives up rather than poll for a layout that may never come.
+    static let exactBottomMaximumAttempts = 3
+
+    /// Lands the transcript on the live edge using UIKit's real scroll
+    /// geometry, bypassing `ScrollViewProxy` row resolution.
+    ///
+    /// On a cold open the lazy stack's rows above the viewport are
+    /// unmaterialized, so a proxy scroll resolves its target against estimated
+    /// heights and can park the reader short of the latest message (the
+    /// "puddle"). This never resolves rows: it rests the viewport on the
+    /// content's real bottom edge. Non-animated by default — the cold-open
+    /// landing is a correction, not a navigation.
+    ///
+    /// Safe to call before the scroll view is attached or has produced a
+    /// content size: the attempt is retried on the next main-queue turn, at
+    /// most `exactBottomMaximumAttempts` times, then given up.
+    func scrollToBottomExact(animated: Bool = false) {
+        cancelExactBottomRetry()
+        exactBottomAttemptCount = 0
+        attemptScrollToBottomExact(animated: animated)
+    }
+
+    /// The content offset that rests the transcript's live edge on the bottom
+    /// of the viewport, from UIKit's real geometry.
+    nonisolated static func bottomTargetOffset(
+        contentSize: CGSize,
+        bounds: CGSize,
+        contentInset: UIEdgeInsets
+    ) -> CGFloat {
+        max(0, contentSize.height - bounds.height + contentInset.bottom)
+    }
+
+    private func attemptScrollToBottomExact(animated: Bool) {
+        exactBottomAttemptCount += 1
+
+        if let scrollView, scrollView.contentSize.height > 0 {
+            var offset = scrollView.contentOffset
+            offset.y = Self.bottomTargetOffset(
+                contentSize: scrollView.contentSize,
+                bounds: scrollView.bounds.size,
+                contentInset: scrollView.adjustedContentInset
+            )
+            scrollView.setContentOffset(offset, animated: animated)
+            return
+        }
+
+        // Not attached or not laid out yet (a cold-open request can precede
+        // the scroll view's first layout pass): one retry on the next
+        // main-queue turn, until the attempt bound is reached.
+        guard exactBottomAttemptCount < Self.exactBottomMaximumAttempts else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.attemptScrollToBottomExact(animated: animated)
+            }
+        }
+        exactBottomRetryWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
+    }
+
+    private func cancelExactBottomRetry() {
+        exactBottomRetryWorkItem?.cancel()
+        exactBottomRetryWorkItem = nil
     }
 
     private func scheduleQuietRelease() {

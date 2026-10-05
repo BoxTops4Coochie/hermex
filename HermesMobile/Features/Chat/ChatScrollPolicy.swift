@@ -48,6 +48,16 @@ enum ChatScrollPolicy {
         shouldFollowLatestMessage && isStreaming && !isDisclosureSettling ? .bottom : nil
     }
 
+    /// True when a message-count change is the transcript's cold-open first
+    /// population: nothing was loaded, then the first batch arrived. That
+    /// landing must use UIKit's real scroll geometry
+    /// (`ChatScrollPositionController.scrollToBottomExact`) because every row
+    /// above the viewport is still an estimate; any later count change keeps
+    /// the proxy-scroll paths.
+    static func isColdOpenFirstPopulation(oldCount: Int, newCount: Int) -> Bool {
+        oldCount == 0 && newCount > 0
+    }
+
     /// Distance (pt) from the bottom within which the scroll-to-bottom button
     /// stays hidden while idle.
     static let bottomDetectionThreshold: CGFloat = 80

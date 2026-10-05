@@ -181,8 +181,19 @@ struct ChatTranscriptView: View {
                 }
                 .animation(ChatMotion.quickState(reduceMotion: reduceMotion), value: showsScrollToBottomButton)
                 .background(Color(.systemBackground))
-                .onChange(of: messages.count) {
+                .onChange(of: messages.count) { oldCount, newCount in
                     guard isFollowingLatestContent else { return }
+
+                    // Cold-open first population: every row above the viewport
+                    // is still an estimate, so a proxy scroll resolves its
+                    // target against unmaterialized space and parks the reader
+                    // short of the latest message. Land on UIKit's real
+                    // geometry instead. Later count changes keep the proxy
+                    // paths (streaming follow, send jump, prepend).
+                    if ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: oldCount, newCount: newCount) {
+                        releasingHold { scrollPositionController.scrollToBottomExact() }
+                        return
+                    }
 
                     if latestTranscriptMessageRole == "user" {
                         releasingHold { onScrollToLatestTranscriptMessage(proxy) }
@@ -205,7 +216,10 @@ struct ChatTranscriptView: View {
                         pinReader(proxy: proxy)
                         return
                     }
-                    releasingHold { onScrollToLatestContent(proxy, false) }
+                    // The swap can leave rows above the viewport unmaterialized,
+                    // where a proxy scroll resolves against estimates; re-pin to
+                    // the live edge through UIKit's real geometry.
+                    releasingHold { scrollPositionController.scrollToBottomExact() }
                 }
                 .onChange(of: clarificationPromptID) {
                     // The bar above the composer just grew the bottom inset; keep
@@ -240,6 +254,12 @@ struct ChatTranscriptView: View {
         hasPerformedInitialBottomAnchorCorrection = true
         guard isFollowingLatestContent else { return }
         onScrollToLatestContent(proxy, false)
+        // The proxy scroll resolves its target against the lazy stack's
+        // estimated heights, which on a cold open are unmaterialized space;
+        // also land on UIKit's real geometry so the live edge wins once the
+        // scroll view has laid out. Safe to call early: it retries for a
+        // bounded number of turns until the scroll view produces content.
+        scrollPositionController.scrollToBottomExact()
     }
 
     /// Identifies the whole transcript content so a scroll to its top can be
