@@ -19,6 +19,18 @@ final class ChatScrollPolicyTests: XCTestCase {
         XCTAssertNil(ChatScrollPolicy.sizeChangeAnchor(shouldFollowLatestMessage: false, isStreaming: false))
     }
 
+    func testColdOpenFirstPopulationIsOnlyTheFirstZeroToNChange() {
+        // Nothing loaded, then the first batch arrived: the landing must use
+        // real scroll geometry instead of lazy-stack estimates.
+        XCTAssertTrue(ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: 0, newCount: 1))
+        XCTAssertTrue(ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: 0, newCount: 50))
+        // Everything else keeps the proxy-scroll paths.
+        XCTAssertFalse(ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: 0, newCount: 0))
+        XCTAssertFalse(ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: 49, newCount: 50))
+        XCTAssertFalse(ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: 50, newCount: 51))
+        XCTAssertFalse(ChatScrollPolicy.isColdOpenFirstPopulation(oldCount: 50, newCount: 0))
+    }
+
     func testInitialAsyncWorkWaitsForNavigationAppearanceCompletion() {
         XCTAssertFalse(ChatInitialAppearancePolicy.shouldBeginAsyncWork(hasCompletedAppearance: false))
         XCTAssertTrue(ChatInitialAppearancePolicy.shouldBeginAsyncWork(hasCompletedAppearance: true))

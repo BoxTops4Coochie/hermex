@@ -350,6 +350,100 @@ final class ChatScrollPositionControllerTests: XCTestCase {
         )
     }
 
+    // MARK: Exact bottom landing
+
+    func testBottomTargetOffsetRestsTheLiveEdgeOnTheBottomInset() {
+        XCTAssertEqual(
+            ChatScrollPositionController.bottomTargetOffset(
+                contentSize: CGSize(width: 320, height: 1_200),
+                bounds: CGSize(width: 320, height: 480),
+                contentInset: UIEdgeInsets(top: 12, left: 0, bottom: 20, right: 0)
+            ),
+            740,
+            accuracy: 0.001
+        )
+    }
+
+    func testBottomTargetOffsetClampsWhenContentIsShorterThanTheViewport() {
+        XCTAssertEqual(
+            ChatScrollPositionController.bottomTargetOffset(
+                contentSize: CGSize(width: 320, height: 100),
+                bounds: CGSize(width: 320, height: 480),
+                contentInset: .zero
+            ),
+            0,
+            accuracy: 0.001
+        )
+    }
+
+    func testScrollToBottomExactLandsOnRealContentBottom() {
+        let scrollView = makeScrollView()
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 40, right: 0)
+        scrollView.contentOffset = CGPoint(x: 0, y: 120)
+        let controller = ChatScrollPositionController()
+        controller.attach(to: scrollView)
+
+        controller.scrollToBottomExact()
+
+        XCTAssertEqual(scrollView.contentOffset.y, 1_200 - 480 + 40, accuracy: 0.001)
+    }
+
+    func testExactBottomRetryGivesUpAfterBoundedAttemptsWhenNeverLaidOut() {
+        // Cold open: the request can precede the scroll view's first layout.
+        // The retry pass must be bounded, never a poll loop.
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        let controller = ChatScrollPositionController()
+        controller.attach(to: scrollView)
+
+        controller.scrollToBottomExact()
+        pumpMainQueue(turns: 8)
+
+        XCTAssertEqual(
+            controller.exactBottomAttemptCount,
+            ChatScrollPositionController.exactBottomMaximumAttempts
+        )
+
+        pumpMainQueue(turns: 4)
+        XCTAssertEqual(
+            controller.exactBottomAttemptCount,
+            ChatScrollPositionController.exactBottomMaximumAttempts
+        )
+    }
+
+    func testExactBottomRetryLandsOnceTheScrollViewProducesContent() {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        let controller = ChatScrollPositionController()
+        controller.attach(to: scrollView)
+
+        controller.scrollToBottomExact()
+        scrollView.contentSize = CGSize(width: 320, height: 1_500)
+
+        pumpMainQueue(turns: 3)
+        XCTAssertEqual(scrollView.contentOffset.y, 1_500 - 480, accuracy: 0.001)
+    }
+
+    func testExactBottomRetrySurvivesAttachingAfterTheRequest() {
+        // onAppear can precede the observer's first attach; the landing must
+        // survive it — an attach cancels preservation, not a pending landing.
+        let controller = ChatScrollPositionController()
+        controller.scrollToBottomExact()
+
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        scrollView.contentSize = CGSize(width: 320, height: 900)
+        controller.attach(to: scrollView)
+
+        pumpMainQueue(turns: 3)
+        XCTAssertEqual(scrollView.contentOffset.y, 900 - 480, accuracy: 0.001)
+    }
+
+    private func pumpMainQueue(turns: Int) {
+        for _ in 0..<turns {
+            let pumped = expectation(description: "main-queue turn")
+            DispatchQueue.main.async { pumped.fulfill() }
+            wait(for: [pumped], timeout: 2)
+        }
+    }
+
     private func makeScrollView() -> UIScrollView {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
         scrollView.contentSize = CGSize(width: 320, height: 1_200)
