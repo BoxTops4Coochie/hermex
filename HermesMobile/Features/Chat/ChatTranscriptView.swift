@@ -4,6 +4,7 @@ import UIKit
 struct ChatTranscriptView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var scrollPositionController = ChatScrollPositionController()
     @State private var hasPerformedInitialBottomAnchorCorrection = false
 
@@ -181,6 +182,16 @@ struct ChatTranscriptView: View {
                 }
                 .animation(ChatMotion.quickState(reduceMotion: reduceMotion), value: showsScrollToBottomButton)
                 .background(Color(.systemBackground))
+                .onChange(of: scenePhase) { _, phase in
+                    // Reopening the app from the app switcher can rebuild the
+                    // scroll view; the initial anchor then re-applies against
+                    // the lazy stack's estimates and lands the reader short of
+                    // the live edge. Re-pin through UIKit's real geometry —
+                    // only for a reader who was following; someone parked in
+                    // history keeps their place (sweep of cold-open variants).
+                    guard phase == .active, isFollowingLatestContent else { return }
+                    scrollPositionController.scrollToBottomExact()
+                }
                 .onChange(of: messages.count) { oldCount, newCount in
                     guard isFollowingLatestContent else { return }
 
