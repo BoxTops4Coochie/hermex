@@ -66,7 +66,7 @@ jobs:
           cat upstream-watch-report.md
 
       - name: Upload report artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: upstream-watch-report
           path: upstream-watch-report.md
