@@ -31,9 +31,8 @@ enum CompanionSettings {
 ///
 /// Taps: a double-tap walks Mikan to the other side; five taps within 2.5s make
 /// Mikan annoyed until 3s pass without a tap. A completed response shows
-/// `.happy` (pointing at the new message) for 2s. While a tool runs Mikan works at
-/// a laptop, and keeps it out for 1.5s after the last tool so bursts of short
-/// tool calls don't flicker.
+/// `.happy` (pointing at the new message) for 2s. Once a tool runs during a reply,
+/// Mikan works at a laptop until that reply's stream ends.
 @MainActor
 struct MikanCompanionView: View {
     let isActiveStream: Bool
@@ -64,7 +63,6 @@ struct MikanCompanionView: View {
     private static let annoyingTapCount = 5
     private static let annoyingTapWindow: TimeInterval = 2.5
     private static let calmDownDelay: Duration = .seconds(3)
-    private static let workingLinger: Duration = .milliseconds(1500)
 
     var body: some View {
         MikanView(state: state, walking: walkingTo?.walkDirection, pointing: newestMessageDirection)
@@ -77,7 +75,12 @@ struct MikanCompanionView: View {
             }
             .task(id: celebration) { await celebrate() }
             .task(id: annoyance) { await calmDown() }
-            .task(id: isRunningTool) { await updateWorking() }
+            .onChange(of: isRunningTool, initial: true) { _, running in
+                if running { isWorking = true }
+            }
+            .onChange(of: isActiveStream) { _, streaming in
+                if !streaming { isWorking = false }
+            }
     }
 
     private var state: CompanionState {
@@ -153,18 +156,6 @@ struct MikanCompanionView: View {
         // A newer celebration cancels this one and owns the flag.
         if !Task.isCancelled {
             isCelebrating = false
-        }
-    }
-
-    /// Starts working immediately; stops only after tools have been idle for a moment.
-    private func updateWorking() async {
-        guard !isRunningTool else {
-            isWorking = true
-            return
-        }
-        try? await Task.sleep(for: Self.workingLinger)
-        if !Task.isCancelled {
-            isWorking = false
         }
     }
 

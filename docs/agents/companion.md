@@ -38,9 +38,10 @@ active stream, so the laptop never outlives a cancelled run.
 
 `.working` shows Mikan standing at a cardboard box with a laptop on it (lid
 back toward the viewer, a mikan sticker, a line of screen light), both paws on
-the keyboard and eyes on the screen. `MikanCompanionView` turns working on as
-soon as a tool runs and off only after tools have been idle for 1.5s, so bursts
-of short tool calls do not flicker the laptop in and out.
+the keyboard and eyes on the screen. Working is sticky for the reply:
+`MikanCompanionView` turns it on the first time a tool runs and off only when
+the stream ends, so Mikan stays at the laptop through later thinking and
+writing instead of flipping back to `.thinking` between tools.
 
 `.happy` is a pointing pose: Mikan leans and points up toward the newest
 message, which sits on the leading side of the transcript (up-left in LTR,
