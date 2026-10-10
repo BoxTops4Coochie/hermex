@@ -1324,6 +1324,7 @@ struct ChatView: View {
                         isActiveStream: viewModel.activeStreamID != nil,
                         hasError: companionHasError,
                         isRunningTool: viewModel.liveToolCalls.contains { !$0.isCompleted },
+                        answerTextPulse: viewModel.streamingHapticPulseTrigger,
                         completedResponseID: companionCompletedResponseID
                     )
                 }

@@ -31,14 +31,17 @@ enum CompanionSettings {
 ///
 /// Taps: a double-tap walks Mikan to the other side; five taps within 2.5s make
 /// Mikan annoyed until 3s pass without a tap. A completed response shows
-/// `.happy` (pointing at the new message) for 2s. Once a tool runs during a reply,
-/// Mikan works at a laptop until that reply's stream ends.
+/// `.happy` (pointing at the new message) for 2s. Each reply starts with Mikan
+/// thinking; once a tool runs or answer text starts arriving, Mikan works at a
+/// laptop until that reply's stream ends.
 @MainActor
 struct MikanCompanionView: View {
     let isActiveStream: Bool
     let hasError: Bool
     /// True while any live tool call is unfinished.
     let isRunningTool: Bool
+    /// Bumps while live answer text arrives (`ChatViewModel.streamingHapticPulseTrigger`).
+    let answerTextPulse: Int
     /// Identifies the latest completed response; each new value triggers a short celebration.
     let completedResponseID: Date?
 
@@ -77,6 +80,9 @@ struct MikanCompanionView: View {
             .task(id: annoyance) { await calmDown() }
             .onChange(of: isRunningTool, initial: true) { _, running in
                 if running { isWorking = true }
+            }
+            .onChange(of: answerTextPulse) {
+                if isActiveStream { isWorking = true }
             }
             .onChange(of: isActiveStream) { _, streaming in
                 if !streaming { isWorking = false }

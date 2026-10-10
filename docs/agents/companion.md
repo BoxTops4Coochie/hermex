@@ -34,14 +34,17 @@ active stream, so the laptop never outlives a cancelled run.
 | `hasError` | `sendErrorMessage`, `errorMessage`, or `latestRunOutcome?.ending == .failed` |
 | completed response | `latestRunOutcome` with `ending == .completed`; its `endedAt` is the trigger |
 | `isRunningTool` | `viewModel.liveToolCalls.contains { !$0.isCompleted }` (ChatView already reads `liveToolCalls`, so no new invalidation) |
+| `answerTextPulse` | `viewModel.streamingHapticPulseTrigger`: bumps while live answer text arrives, regardless of the haptics setting, and not for replayed text after a reattach (ChatView already observes it) |
 | annoyed | local to `MikanCompanionView`: tapping Mikan too often (see Taps) |
 
 `.working` shows Mikan standing at a cardboard box with a laptop on it (lid
 back toward the viewer, a mikan sticker, a line of screen light), both paws on
-the keyboard and eyes on the screen. Working is sticky for the reply:
-`MikanCompanionView` turns it on the first time a tool runs and off only when
-the stream ends, so Mikan stays at the laptop through later thinking and
-writing instead of flipping back to `.thinking` between tools.
+the keyboard and eyes on the screen. Every reply goes thinking → laptop:
+`MikanCompanionView` turns working on the first time a tool runs **or** answer
+text arrives (`answerTextPulse`), and off only when the stream ends. Mikan
+stays at the laptop through later reasoning instead of flipping back to
+`.thinking`. The reasoning-only start of a reply stays `.thinking`. Do not use
+`liveTurnTTFT` for this: it also fires on the first reasoning chunk.
 
 `.happy` is a pointing pose: Mikan leans and points up toward the newest
 message, which sits on the leading side of the transcript (up-left in LTR,
