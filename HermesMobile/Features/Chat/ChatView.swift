@@ -1321,11 +1321,14 @@ struct ChatView: View {
                 // touches (double-tap to switch sides); the row's empty width passes through.
                 if isCompanionEnabled {
                     MikanCompanionView(
-                        isActiveStream: viewModel.activeStreamID != nil,
-                        hasError: companionHasError,
+                        streamID: viewModel.activeStreamID,
+                        hasError: viewModel.sendErrorMessage != nil || viewModel.errorMessage != nil,
+                        lastRunFailed: viewModel.latestRunOutcome?.ending == .failed,
                         isRunningTool: viewModel.liveToolCalls.contains { !$0.isCompleted },
-                        answerTextPulse: viewModel.streamingHapticPulseTrigger,
-                        completedResponseID: companionCompletedResponseID
+                        hasAnswerText: viewModel.hasLiveAnswerText,
+                        completedResponseID: companionCompletedResponseID,
+                        // Assistant replies sit on the transcript's leading edge.
+                        newestMessageSide: chatLayoutDirection == .rightToLeft ? .right : .left
                     )
                 }
 
@@ -1643,12 +1646,6 @@ struct ChatView: View {
             count += 1
         }
         return count
-    }
-
-    private var companionHasError: Bool {
-        viewModel.sendErrorMessage != nil
-            || viewModel.errorMessage != nil
-            || viewModel.latestRunOutcome?.ending == .failed
     }
 
     /// End time of the latest run, only when it completed (not cancelled or failed).

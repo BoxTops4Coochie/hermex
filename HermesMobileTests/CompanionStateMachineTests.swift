@@ -3,38 +3,43 @@ import XCTest
 
 final class CompanionStateMachineTests: XCTestCase {
     func testAllInputCombinationsFollowPriorityOrder() {
-        for isActiveStream in [false, true] {
-            for hasError in [false, true] {
-                for justCompleted in [false, true] {
-                  for isAnnoyed in [false, true] {
-                   for isRunningTool in [false, true] {
-                    let expected: CompanionState
-                    if isAnnoyed {
-                        expected = .annoyed
-                    } else if hasError {
-                        expected = .sad
-                    } else if justCompleted {
-                        expected = .happy
-                    } else if isActiveStream && isRunningTool {
-                        expected = .working
-                    } else if isActiveStream {
-                        expected = .thinking
-                    } else {
-                        expected = .idle
+        let flags = [false, true]
+        for isActiveStream in flags {
+            for hasError in flags {
+                for justCompleted in flags {
+                    for lastRunFailed in flags {
+                        for isWorking in flags {
+                            for isAnnoyed in flags {
+                                let expected: CompanionState
+                                if isAnnoyed {
+                                    expected = .annoyed
+                                } else if hasError || (lastRunFailed && !isActiveStream) {
+                                    expected = .sad
+                                } else if justCompleted {
+                                    expected = .happy
+                                } else if isActiveStream && isWorking {
+                                    expected = .working
+                                } else if isActiveStream {
+                                    expected = .thinking
+                                } else {
+                                    expected = .idle
+                                }
+                                XCTAssertEqual(
+                                    CompanionStateMachine.state(
+                                        isActiveStream: isActiveStream,
+                                        hasError: hasError,
+                                        justCompletedResponse: justCompleted,
+                                        lastRunFailed: lastRunFailed,
+                                        isWorking: isWorking,
+                                        isAnnoyed: isAnnoyed
+                                    ),
+                                    expected,
+                                    "stream=\(isActiveStream) error=\(hasError) completed=\(justCompleted) "
+                                        + "failed=\(lastRunFailed) working=\(isWorking) annoyed=\(isAnnoyed)"
+                                )
+                            }
+                        }
                     }
-                    XCTAssertEqual(
-                        CompanionStateMachine.state(
-                            isActiveStream: isActiveStream,
-                            hasError: hasError,
-                            justCompletedResponse: justCompleted,
-                            isRunningTool: isRunningTool,
-                            isAnnoyed: isAnnoyed
-                        ),
-                        expected,
-                        "stream=\(isActiveStream) error=\(hasError) completed=\(justCompleted) annoyed=\(isAnnoyed) tool=\(isRunningTool)"
-                    )
-                   }
-                  }
                 }
             }
         }
@@ -42,34 +47,79 @@ final class CompanionStateMachineTests: XCTestCase {
 
     func testAnnoyedBeatsEverything() {
         XCTAssertEqual(
-            CompanionStateMachine.state(isActiveStream: true, hasError: true, justCompletedResponse: true, isAnnoyed: true),
+            CompanionStateMachine.state(isActiveStream: true, hasError: true, justCompletedResponse: true,
+                                        lastRunFailed: true, isWorking: true, isAnnoyed: true),
             .annoyed
         )
     }
 
-    func testRunningToolIsWorkingOnlyWhileStreaming() {
-        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: false, isRunningTool: true), .working)
-        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: false, hasError: false, justCompletedResponse: false, isRunningTool: true), .idle)
-        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: true, isRunningTool: true), .happy)
+    func testFailedRunIsSadOnlyUntilTheNextReplyStarts() {
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: false, hasError: false, justCompletedResponse: false, lastRunFailed: true), .sad)
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: false, lastRunFailed: true), .thinking)
     }
 
-    func testErrorBeatsCelebrationAndStreaming() {
+    func testWorkingOnlyWhileStreaming() {
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: false, isWorking: true), .working)
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: false, hasError: false, justCompletedResponse: false, isWorking: true), .idle)
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: true, isWorking: true), .happy)
+    }
+
+    func testCurrentErrorBeatsCelebrationAndStreaming() {
         XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: true, justCompletedResponse: true), .sad)
-    }
-
-    func testCelebrationBeatsStreaming() {
-        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: true), .happy)
     }
 
     func testStreamingIsThinkingAndRestIsIdle() {
         XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: false), .thinking)
         XCTAssertEqual(CompanionStateMachine.state(isActiveStream: false, hasError: false, justCompletedResponse: false), .idle)
     }
+}
 
-    func testSameInputAlwaysYieldsSameState() {
-        for _ in 0..<10 {
-            XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: false), .thinking)
+final class CompanionTapTrackerTests: XCTestCase {
+    private let t0 = Date(timeIntervalSinceReferenceDate: 0)
+
+    private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
+
+    func testQuickPairIsADoubleTap() {
+        var taps = CompanionTapTracker()
+        XCTAssertEqual(taps.register(at: at(0)), .none)
+        XCTAssertEqual(taps.register(at: at(0.2)), .doubleTap)
+    }
+
+    func testSlowPairIsNotADoubleTap() {
+        var taps = CompanionTapTracker()
+        XCTAssertEqual(taps.register(at: at(0)), .none)
+        XCTAssertEqual(taps.register(at: at(0.5)), .none)
+    }
+
+    func testThirdQuickTapStartsANewPairInsteadOfWalkingAgain() {
+        var taps = CompanionTapTracker()
+        XCTAssertEqual(taps.register(at: at(0)), .none)
+        XCTAssertEqual(taps.register(at: at(0.2)), .doubleTap)
+        XCTAssertEqual(taps.register(at: at(0.4)), .none)
+        XCTAssertEqual(taps.register(at: at(0.6)), .doubleTap)
+    }
+
+    func testFiveTapsInTheWindowAnnoyOnceThenStayAnnoyed() {
+        var taps = CompanionTapTracker()
+        let outcomes = [0.0, 0.5, 1.0, 1.5, 2.0, 2.2].map { taps.register(at: at($0)) }
+        XCTAssertEqual(outcomes, [.none, .none, .none, .none, .becameAnnoyed, .stillAnnoyed])
+        XCTAssertTrue(taps.isAnnoyed)
+    }
+
+    func testTapsSpreadOutDoNotAnnoy() {
+        var taps = CompanionTapTracker()
+        for second in stride(from: 0.0, to: 10, by: 1) {
+            XCTAssertEqual(taps.register(at: at(second)), .none)
         }
+        XCTAssertFalse(taps.isAnnoyed)
+    }
+
+    func testCalmDownResetsEverything() {
+        var taps = CompanionTapTracker()
+        for second in [0.0, 0.5, 1.0, 1.5, 2.0] { _ = taps.register(at: at(second)) }
+        taps.calmDown()
+        XCTAssertFalse(taps.isAnnoyed)
+        XCTAssertEqual(taps.register(at: at(10)), .none)
     }
 }
 

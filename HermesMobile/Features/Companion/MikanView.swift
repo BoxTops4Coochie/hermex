@@ -1,8 +1,20 @@
 import SwiftUI
 
-/// Screen direction Mikan walks in. Physical, not leading/trailing: the drawing never mirrors.
-enum MikanWalkDirection: Equatable, Sendable {
+/// A physical screen side or direction (never leading/trailing; the drawing never
+/// mirrors for RTL). Used for where Mikan sits, which way it walks, and where it points.
+enum CompanionSide: String, CaseIterable, Identifiable, Sendable {
     case left, right
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .left: String(localized: "Left")
+        case .right: String(localized: "Right")
+        }
+    }
+
+    var opposite: CompanionSide { self == .left ? .right : .left }
 }
 
 /// Mikan, the vector companion cat. Drawn on a `Canvas` in a 100×110 unit space
@@ -14,9 +26,9 @@ enum MikanWalkDirection: Equatable, Sendable {
 struct MikanView: View {
     var state: CompanionState
     /// Non-nil while walking.
-    var walking: MikanWalkDirection? = nil
+    var walking: CompanionSide? = nil
     /// Which way `.happy` points (toward the newest message).
-    var pointing: MikanWalkDirection = .left
+    var pointing: CompanionSide = .left
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -24,14 +36,15 @@ struct MikanView: View {
     @State private var fidget = false
     @State private var stride = false
     /// The paw lifted mid-keystroke while `.working`.
-    @State private var keystroke: MikanWalkDirection?
+    @State private var keystroke: CompanionSide?
 
     var body: some View {
         MikanFigure(rig: rig, ink: colorScheme == .dark ? MikanPalette.inkDark : MikanPalette.inkLight)
             .aspectRatio(100.0 / 110.0, contentMode: .fit)
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.35), value: state)
-            .task(id: state) { await fidgetLoop() }
-            .task(id: walking) { await walkLoop() }
+            // Keyed on Reduce Motion too, so toggling it mid-chat restarts (and stops) the loops.
+            .task(id: LoopKey(value: state, reduceMotion: reduceMotion)) { await fidgetLoop() }
+            .task(id: LoopKey(value: walking, reduceMotion: reduceMotion)) { await walkLoop() }
             .accessibilityHidden(true)
     }
 
@@ -106,6 +119,11 @@ struct MikanView: View {
     }
 }
 
+private struct LoopKey<Value: Equatable>: Equatable {
+    let value: Value
+    let reduceMotion: Bool
+}
+
 // MARK: - Previews
 
 #Preview("All states") {
@@ -120,7 +138,7 @@ struct MikanView: View {
 
 #Preview("Interactive") {
     @Previewable @State var state = CompanionState.idle
-    @Previewable @State var walking: MikanWalkDirection?
+    @Previewable @State var walking: CompanionSide?
     VStack(spacing: 24) {
         MikanView(state: state, walking: walking).frame(width: 120, height: 132)
         Picker("State", selection: $state) {

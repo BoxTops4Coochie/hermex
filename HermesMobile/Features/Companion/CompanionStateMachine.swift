@@ -4,19 +4,25 @@ enum CompanionState: Equatable, Sendable {
 }
 
 /// Maps chat state onto Mikan's reaction.
-/// Priority: annoyed (being poked) > error > just completed > running a tool > streaming > idle.
+/// Priority: annoyed (being poked) > error > just completed > working > streaming > idle.
 enum CompanionStateMachine {
+    /// - Parameters:
+    ///   - hasError: a current send or load error.
+    ///   - lastRunFailed: the latest finished run failed. Only shows while idle, so a
+    ///     new reply is not drawn sad because of the previous one.
+    ///   - isWorking: a tool has run or answer text has started in this reply.
     static func state(
         isActiveStream: Bool,
         hasError: Bool,
         justCompletedResponse: Bool,
-        isRunningTool: Bool = false,
+        lastRunFailed: Bool = false,
+        isWorking: Bool = false,
         isAnnoyed: Bool = false
     ) -> CompanionState {
         if isAnnoyed { return .annoyed }
-        if hasError { return .sad }
+        if hasError || (lastRunFailed && !isActiveStream) { return .sad }
         if justCompletedResponse { return .happy }
-        if isActiveStream && isRunningTool { return .working }
+        if isActiveStream && isWorking { return .working }
         if isActiveStream { return .thinking }
         return .idle
     }

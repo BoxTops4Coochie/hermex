@@ -34,7 +34,7 @@ struct MikanRig: VectorArithmetic {
     }
 
     /// The resting pose for a state. `.happy` points at the newest message, toward `pointing`.
-    static func pose(for state: CompanionState, pointing: MikanWalkDirection = .left) -> MikanRig {
+    static func pose(for state: CompanionState, pointing: CompanionSide = .left) -> MikanRig {
         var r = MikanRig()
         r[.eyeOpen] = 1
         r.setArms(left: (CGPoint(x: 36, y: 62), CGPoint(x: 36, y: 70)),
@@ -122,7 +122,7 @@ struct MikanRig: VectorArithmetic {
     }
 
     /// This pose mid-stride: face, lean, legs, arms, and tail take the walk; the expression stays.
-    func walking(toward direction: MikanWalkDirection, stride: Bool) -> MikanRig {
+    func walking(toward direction: CompanionSide, stride: Bool) -> MikanRig {
         var r = self
         let dir: Double = direction == .right ? 1 : -1
         let step: Double = stride ? 1 : -1
