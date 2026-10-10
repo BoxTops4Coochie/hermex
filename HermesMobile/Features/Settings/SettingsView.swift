@@ -150,6 +150,10 @@ struct SettingsView: View {
 
                     SettingsDivider()
 
+                    CompanionSettingsSection()
+
+                    SettingsDivider()
+
                     AppIconSettingsSection()
 
                     WidgetDiagnosticsSection()

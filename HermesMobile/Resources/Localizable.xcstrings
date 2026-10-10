@@ -130428,7 +130428,537 @@
     "Jump straight back into a recent chat." : { "localizations" : { "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Springe direkt zu einem aktuellen Chat zurück." } }, "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Vuelve directamente a una conversación reciente." } }, "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Revenez directement à une discussion récente." } }, "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Torna subito a una chat recente." } }, "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Wróć od razu do ostatniego czatu." } }, "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Volte direto para uma conversa recente." } }, "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Ga direct terug naar een recente chat." } }, "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "Doğrudan son bir sohbete geri dönün." } }, "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Сразу вернитесь к недавнему чату." } }, "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "最近のチャットにすぐに戻れます。" } }, "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "直接回到最近的聊天。" } }, "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "최근 채팅으로 바로 돌아가세요." } }, "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "عد مباشرة إلى محادثة حديثة." } }, "he" : { "stringUnit" : { "state" : "needs_review", "value" : "חזור ישירות לצ'אט אחרון." } }, "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "کسی حالیہ چیٹ پر براہ راست واپس جائیں۔" } }, "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "直接回到最近的聊天。" } }, "zh-HK" : { "stringUnit" : { "state" : "needs_review", "value" : "直接回到最近的聊天。" } } } },
     "Refactor the auth flow" : { "localizations" : { "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Auth-Ablauf umgestalten" } }, "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Reestructurar el flujo de autenticación" } }, "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Refondre le flux d'authentification" } }, "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Rifattorizza il flusso di autenticazione" } }, "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Zrefaktoryzuj przepływ uwierzytelniania" } }, "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Refatorar o fluxo de autenticação" } }, "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Auth-flow herstructureren" } }, "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "Kimlik doğrulama akışını yeniden düzenle" } }, "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Рефакторинг процесса входа" } }, "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "認証フローをリファクタリング" } }, "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "重构身份验证流程" } }, "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "인증 흐름 리팩터링" } }, "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "إعادة هيكلة تدفق المصادقة" } }, "he" : { "stringUnit" : { "state" : "needs_review", "value" : "בצע רפאקטורינג לתהליך האימות" } }, "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "تصدیقی فلو کو دوبارہ ترتیب دیں" } }, "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "重構身份驗證流程" } }, "zh-HK" : { "stringUnit" : { "state" : "needs_review", "value" : "重構身份驗證流程" } } } },
     "Fix flaky streaming tests" : { "localizations" : { "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Flackernde Streaming-Tests beheben" } }, "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Arreglar las pruebas inestables de streaming" } }, "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Corriger les tests de streaming instables" } }, "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Correggi i test di streaming instabili" } }, "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Napraw niestabilne testy strumieniowania" } }, "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Corrigir testes de streaming instáveis" } }, "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Fluctuerende streamingtests oplossen" } }, "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "Kararsız akış testlerini düzelt" } }, "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Исправить нестабильные тесты стриминга" } }, "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "不安定なストリーミングテストを修正" } }, "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "修复不稳定的流式测试" } }, "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "불안정한 스트리밍 테스트 수정" } }, "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "إصلاح اختبارات البث غير المستقرة" } }, "he" : { "stringUnit" : { "state" : "needs_review", "value" : "תקן בדיקות סטרימינג לא יציבות" } }, "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "غیر مستقل اسٹریمنگ ٹیسٹ کو ٹھیک کریں" } }, "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "修復不穩定的串流測試" } }, "zh-HK" : { "stringUnit" : { "state" : "needs_review", "value" : "修復不穩定的串流測試" } } } },
-    "Prepare the release notes" : { "localizations" : { "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Versionshinweise vorbereiten" } }, "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Preparar las notas de la versión" } }, "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Préparer les notes de version" } }, "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Prepara le note di rilascio" } }, "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Przygotuj informacje o wydaniu" } }, "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Preparar as notas da versão" } }, "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Bereid de releaseopmerkingen voor" } }, "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "Sürüm notlarını hazırla" } }, "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Подготовить примечания к выпуску" } }, "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "リリースノートを準備" } }, "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "准备发行说明" } }, "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "릴리스 노트 준비" } }, "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "إعداد ملاحظات الإصدار" } }, "he" : { "stringUnit" : { "state" : "needs_review", "value" : "הכן את הערות המהדורה" } }, "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "ریلیز نوٹس تیار کریں" } }, "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "準備發行說明" } }, "zh-HK" : { "stringUnit" : { "state" : "needs_review", "value" : "準備發行說明" } } } }
+    "Prepare the release notes" : { "localizations" : { "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Versionshinweise vorbereiten" } }, "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Preparar las notas de la versión" } }, "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Préparer les notes de version" } }, "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Prepara le note di rilascio" } }, "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Przygotuj informacje o wydaniu" } }, "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Preparar as notas da versão" } }, "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Bereid de releaseopmerkingen voor" } }, "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "Sürüm notlarını hazırla" } }, "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Подготовить примечания к выпуску" } }, "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "リリースノートを準備" } }, "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "准备发行说明" } }, "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "릴리스 노트 준비" } }, "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "إعداد ملاحظات الإصدار" } }, "he" : { "stringUnit" : { "state" : "needs_review", "value" : "הכן את הערות המהדורה" } }, "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "ریلیز نوٹس تیار کریں" } }, "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "準備發行說明" } }, "zh-HK" : { "stringUnit" : { "state" : "needs_review", "value" : "準備發行說明" } } } },
+    "Companion" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "رفيق"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Begleiter"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compañero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compagnon"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "בן לוויה"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compagno"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "コンパニオン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "컴패니언"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Metgezel"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Towarzysz"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Companheiro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Компаньон"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arkadaş"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ساتھی"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "夥伴"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "伙伴"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "夥伴"
+          }
+        }
+      }
+    },
+    "Position" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "الموضع"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Position"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Posición"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Position"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "מיקום"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Posizione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "位置"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "위치"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Positie"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Położenie"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Posição"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Положение"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Konum"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "مقام"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "位置"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "位置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "位置"
+          }
+        }
+      }
+    },
+    "Left" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "يسار"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Links"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Izquierda"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gauche"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "שמאל"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sinistra"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "左"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "왼쪽"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Links"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lewo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esquerda"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Слева"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sol"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "بائیں"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "左"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "左"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "左"
+          }
+        }
+      }
+    },
+    "Right" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "يمين"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rechts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Derecha"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Droite"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ימין"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Destra"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "右"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "오른쪽"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rechts"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prawo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Direita"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Справа"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sağ"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "دائیں"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "右"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "右"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "右"
+          }
+        }
+      }
+    },
+    "Mikan sits above the composer and reacts while Hermes works. Double-tap Mikan to switch sides." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "يجلس Mikan فوق المُنشئ ويتفاعل أثناء عمل Hermes. انقر نقرًا مزدوجًا على Mikan لتبديل الجانب."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan sitzt über dem Composer und reagiert, während Hermes arbeitet. Tippe doppelt auf Mikan, um die Seite zu wechseln."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan se sienta sobre el compositor y reacciona mientras Hermes trabaja. Toca dos veces a Mikan para cambiarlo de lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan se tient au-dessus de la zone de composition et réagit pendant que Hermes travaille. Touchez deux fois Mikan pour changer de côté."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan יושב מעל אזור החיבור ומגיב בזמן ש-Hermes עובד. הקש פעמיים על Mikan כדי להחליף צד."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan sta sopra il compositore e reagisce mentre Hermes lavora. Tocca due volte Mikan per cambiare lato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikanは入力欄の上にいて、Hermesの作業中に反応します。Mikanをダブルタップすると反対側に移動します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan은 작성기 위에 앉아 Hermes가 작업하는 동안 반응합니다. Mikan을 두 번 탭하면 반대쪽으로 이동합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan zit boven de opsteller en reageert terwijl Hermes werkt. Tik twee keer op Mikan om van kant te wisselen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan siedzi nad kompozytorem i reaguje, gdy Hermes pracuje. Stuknij dwukrotnie Mikana, aby zmienić stronę."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan fica acima do compositor e reage enquanto o Hermes trabalha. Toque duas vezes em Mikan para trocar de lado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan сидит над редактором и реагирует, пока Hermes работает. Дважды коснитесь Mikan, чтобы сменить сторону."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan yazma alanının üstünde durur ve Hermes çalışırken tepki verir. Taraf değiştirmek için Mikan'a iki kez dokunun."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan کمپوزر کے اوپر بیٹھتا ہے اور Hermes کے کام کے دوران ردعمل دیتا ہے۔ طرف بدلنے کے لیے Mikan پر دو بار تھپتھپائیں۔"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan 坐在編寫器上方，會在 Hermes 工作時作出反應。點兩下 Mikan 可切換到另一邊。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan 坐在编写器上方，会在 Hermes 工作时做出反应。双击 Mikan 可切换到另一侧。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mikan 坐在撰寫器上方，會在 Hermes 工作時做出反應。點兩下 Mikan 可切換到另一側。"
+          }
+        }
+      }
+    }
   },
   "version" : "1.0"
 }
