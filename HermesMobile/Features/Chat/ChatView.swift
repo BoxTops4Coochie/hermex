@@ -1314,8 +1314,19 @@ struct ChatView: View {
 
     @ViewBuilder
     private var composerAccessoryStack: some View {
-        if composerAccessoryVisibleItemCount > 0 {
+        if composerAccessoryVisibleItemCount > 0 || isCompanionEnabled {
             VStack(spacing: composerAccessoryVerticalSpacing) {
+                // Mikan rides on top of the stack and reserves no transcript space: it may
+                // overlap the newest message, never the notices below it. Only Mikan takes
+                // touches (double-tap to switch sides); the row's empty width passes through.
+                if isCompanionEnabled {
+                    MikanCompanionView(
+                        isActiveStream: viewModel.activeStreamID != nil,
+                        hasError: companionHasError,
+                        completedResponseID: companionCompletedResponseID
+                    )
+                }
+
                 if !composerLocalNotices.isEmpty {
                     PinnedLocalNoticeStack(notices: composerLocalNotices)
                         .allowsHitTesting(false)
@@ -1332,15 +1343,6 @@ struct ChatView: View {
                     ApprovalBypassStatusPill()
                         .allowsHitTesting(false)
                         .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
-                }
-
-                // Only Mikan takes touches (double-tap to switch sides); the row's empty width passes through.
-                if isCompanionEnabled {
-                    MikanCompanionView(
-                        isActiveStream: viewModel.activeStreamID != nil,
-                        hasError: companionHasError,
-                        completedResponseID: companionCompletedResponseID
-                    )
                 }
             }
             .padding(.horizontal)
@@ -1619,9 +1621,6 @@ struct ChatView: View {
         if showsApprovalBypassStatus {
             height += approvalBypassStatusSpacerHeight
         }
-        if isCompanionEnabled {
-            height += CompanionSettings.rowHeight
-        }
 
         let visibleItemCount = composerAccessoryVisibleItemCount
         if visibleItemCount > 1 {
@@ -1639,9 +1638,6 @@ struct ChatView: View {
             count += 1
         }
         if showsApprovalBypassStatus {
-            count += 1
-        }
-        if isCompanionEnabled {
             count += 1
         }
         return count

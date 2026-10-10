@@ -91,16 +91,20 @@ These follow the "no continuous repaint" and Reduce Motion rules in `AGENTS.md`.
 
 ## Placement
 
-Mikan is the last row of `ChatView.composerAccessoryStack`, so it rides the
-keyboard and stacks with pinned notices and run-status bars.
+Mikan is the **first** row of `ChatView.composerAccessoryStack`, so it rides the
+keyboard and sits on top of any pinned notices and run-status bars.
 
 - Mikan renders at `CompanionSettings.width` × `rowHeight` (60×66pt).
-- It counts in `composerAccessoryVisibleItemCount`, and its
-  `CompanionSettings.rowHeight` counts in `composerAccessorySpacerHeight`.
-  That reserves room in the transcript inset so Mikan never covers the last
-  message.
+- It deliberately **reserves no transcript space**. It is not counted in
+  `composerAccessoryVisibleItemCount` or `composerAccessorySpacerHeight`, so it
+  may overlap the bottom of the newest message. Being first in the stack keeps
+  it from ever covering a notice or the run-status bar, which keep their
+  reserved slots directly above the composer. The stack renders when
+  `isCompanionEnabled` even if no other item is visible.
+- The scroll-to-bottom button is centered and Mikan rests at a side edge, so
+  they only cross while Mikan walks across.
 - The stack used to apply `.allowsHitTesting(false)` to the whole `VStack`. That
-  modifier now sits on each existing item, so only Mikan's 60pt hit area takes
+  modifier now sits on each existing item, so only Mikan's own frame takes
   touches. The rest of its row passes touches through to the transcript.
 - It must never live inside the transcript `LazyVStack` or any scroll row.
 
