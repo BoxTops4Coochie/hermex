@@ -79,3 +79,13 @@ _Avoid_: Bulk update, batch operation
 **Select Cards**:
 The mode for choosing Cards before applying a Bulk Action.
 _Avoid_: Multi-select, bulk mode
+
+## Companion
+
+**Mikan**:
+The orange cat companion shown above the chat composer that reacts to the active session. Details in `docs/agents/companion.md`.
+_Avoid_: Mascot, avatar, pet
+
+**Companion State**:
+What Mikan is reacting to: idle, thinking (a stream is active), happy (a response just completed), or sad (an error or failed run).
+_Avoid_: Mood, emotion
