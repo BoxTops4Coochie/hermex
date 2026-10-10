@@ -86,6 +86,11 @@ These follow the "no continuous repaint" and Reduce Motion rules in `AGENTS.md`.
   twitch or tail flick) fire every 2.5–5s through a `.task(id: state)` sleep
   loop, then hold still. There are no fidgets in `.happy`.
 - The walk loop runs only while `walking` is non-nil (about 3s, a step every 0.3s).
+- The walk pose (`walkingTo`) and the walk position (`walkPosition`) are separate
+  state with separate animations. Do not add an implicit
+  `.animation(_:value: walking)` inside `MikanView`: implicit animations also
+  re-time the view's position change in the same transaction, so Mikan would
+  jump across in 0.4s and then walk in place. (That was a real bug.)
 - Reduce Motion: pose changes snap, fidgets and the walk cycle are off, and a
   double-tap swaps sides instantly.
 

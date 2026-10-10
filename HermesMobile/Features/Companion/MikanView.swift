@@ -28,7 +28,6 @@ struct MikanView: View {
         MikanFigure(rig: rig, ink: colorScheme == .dark ? MikanPalette.inkDark : MikanPalette.inkLight)
             .aspectRatio(100.0 / 110.0, contentMode: .fit)
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.35), value: state)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.35), value: walking)
             .task(id: state) { await fidgetLoop() }
             .task(id: walking) { await walkLoop() }
             .accessibilityHidden(true)

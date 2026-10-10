@@ -43,7 +43,10 @@ struct MikanCompanionView: View {
     @AppStorage(AppHaptics.isEnabledKey) private var isHapticsEnabled = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.layoutDirection) private var layoutDirection
+    /// Drives the walk pose (legs, facing). Kept separate from `walkPosition` so the
+    /// pose change gets a short animation and only the position gets the slow walk.
     @State private var walkingTo: CompanionSide?
+    @State private var walkPosition: CompanionSide?
     @State private var celebration = 0
     @State private var isCelebrating = false
     @State private var recentTaps: [Date] = []
@@ -62,7 +65,7 @@ struct MikanCompanionView: View {
             .frame(width: CompanionSettings.width, height: CompanionSettings.rowHeight)
             .contentShape(Rectangle())
             .onTapGesture(perform: handleTap)
-            .frame(maxWidth: .infinity, alignment: alignment(for: walkingTo ?? storedSide))
+            .frame(maxWidth: .infinity, alignment: alignment(for: walkPosition ?? storedSide))
             .onChange(of: completedResponseID) { _, newValue in
                 if newValue != nil { celebration += 1 }
             }
@@ -115,17 +118,23 @@ struct MikanCompanionView: View {
     }
 
     private func switchSides() {
-        guard walkingTo == nil else { return }
+        guard walkingTo == nil, walkPosition == nil else { return }
         let target = storedSide.opposite
         guard !reduceMotion else {
             sideRawValue = target.rawValue
             return
         }
-        withAnimation(.easeInOut(duration: Self.walkDuration)) {
+        withAnimation(.easeOut(duration: 0.25)) {
             walkingTo = target
+        }
+        withAnimation(.easeInOut(duration: Self.walkDuration)) {
+            walkPosition = target
         } completion: {
             sideRawValue = target.rawValue
-            walkingTo = nil
+            walkPosition = nil
+            withAnimation(.spring(duration: 0.4, bounce: 0.3)) {
+                walkingTo = nil
+            }
         }
     }
 
