@@ -87,5 +87,5 @@ The orange cat companion shown above the chat composer that reacts to the active
 _Avoid_: Mascot, avatar, pet
 
 **Companion State**:
-What Mikan is reacting to: idle, thinking (a stream is active), happy (a response just completed), or sad (an error or failed run).
+What Mikan is reacting to: idle, thinking (a stream is active), happy (a response just completed; Mikan points at it), sad (an error or failed run), or annoyed (tapped too many times in a row).
 _Avoid_: Mood, emotion

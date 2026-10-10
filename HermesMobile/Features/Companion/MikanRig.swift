@@ -1,12 +1,14 @@
 import SwiftUI
 
 /// Every animatable pose value in one vector so SwiftUI can interpolate whole poses.
+/// All 32 slots are in use; widen to `SIMD64` before adding another.
 struct MikanRig: VectorArithmetic {
     enum Slot: Int {
         case headTilt, headDY, earDroop, earTwitch, eyeOpen, happyEyes, sadLid, look, faceDX
         case browThink, browSad, mouthOpen, mouthFrown, mouthHmm
         case lElbowX, lElbowY, lHandX, lHandY, rElbowX, rElbowY, rHandX, rHandY
         case tail, tailDroop, bodyRot, leftLift, rightLift, tear, leftArmOver, rightArmOver
+        case browAngry, angryLid
     }
 
     private var v = SIMD32<Double>()
@@ -31,7 +33,8 @@ struct MikanRig: VectorArithmetic {
         self[.rHandX] = right.1.x; self[.rHandY] = right.1.y
     }
 
-    static func pose(for state: CompanionState) -> MikanRig {
+    /// The resting pose for a state. `.happy` points at the newest message, toward `pointing`.
+    static func pose(for state: CompanionState, pointing: MikanWalkDirection = .left) -> MikanRig {
         var r = MikanRig()
         r[.eyeOpen] = 1
         r.setArms(left: (CGPoint(x: 36, y: 62), CGPoint(x: 36, y: 70)),
@@ -49,14 +52,18 @@ struct MikanRig: VectorArithmetic {
                       right: (CGPoint(x: 63, y: 64), CGPoint(x: 56, y: 68)))
             r[.leftArmOver] = 1
         case .happy:
-            r[.happyEyes] = 1
+            // Leans and points up-left at the message that just finished; other paw on hip.
             r[.mouthOpen] = 1
+            r[.headTilt] = -7
             r[.headDY] = -1
+            r[.faceDX] = -2.5
+            r[.look] = -1.6
+            r[.bodyRot] = -3
             r[.tail] = -14
-            r.setArms(left: (CGPoint(x: 30, y: 46), CGPoint(x: 28, y: 34)),
-                      right: (CGPoint(x: 70, y: 46), CGPoint(x: 72, y: 34)))
+            r.setArms(left: (CGPoint(x: 32, y: 44), CGPoint(x: 22, y: 35)),
+                      right: (CGPoint(x: 69, y: 60), CGPoint(x: 61, y: 68)))
             r[.leftArmOver] = 1
-            r[.rightArmOver] = 1
+            if pointing == .right { r.mirror() }
         case .sad:
             r[.earDroop] = 55
             r[.sadLid] = 1
@@ -68,6 +75,18 @@ struct MikanRig: VectorArithmetic {
             r[.tear] = 1
             r.setArms(left: (CGPoint(x: 38, y: 64), CGPoint(x: 40, y: 72)),
                       right: (CGPoint(x: 62, y: 64), CGPoint(x: 60, y: 72)))
+        case .annoyed:
+            // Ears pinned, arms crossed, side-eye.
+            r[.earDroop] = 32
+            r[.angryLid] = 1
+            r[.browAngry] = 1
+            r[.mouthFrown] = 1
+            r[.headTilt] = 5
+            r[.faceDX] = 1.5
+            r[.look] = 1.5
+            r[.tail] = -20
+            r.setArms(left: (CGPoint(x: 36, y: 64), CGPoint(x: 57, y: 61)),
+                      right: (CGPoint(x: 64, y: 64), CGPoint(x: 43, y: 61)))
         }
         return r
     }
@@ -82,26 +101,47 @@ struct MikanRig: VectorArithmetic {
             self[.look] -= 0.6
         case .sad:
             self[.tail] += 4
+        case .annoyed:
+            self[.tail] += 18
         case .happy:
             break
         }
     }
 
-    static func walking(toward direction: MikanWalkDirection, stride: Bool) -> MikanRig {
-        var r = pose(for: .idle)
+    /// This pose mid-stride: face, lean, legs, arms, and tail take the walk; the expression stays.
+    func walking(toward direction: MikanWalkDirection, stride: Bool) -> MikanRig {
+        var r = self
         let dir: Double = direction == .right ? 1 : -1
         let step: Double = stride ? 1 : -1
+        r[.headTilt] = 0
         r[.faceDX] = 4 * dir
         r[.look] = 1.2 * dir
         r[.bodyRot] = 3 * step
         r[.tail] = -8 * step
+        r[.tailDroop] = 0
         r[.leftLift] = max(0, step) * 4
         r[.rightLift] = max(0, -step) * 4
         let ls = CGPoint(x: 41, y: 52), rs = CGPoint(x: 59, y: 52)
         let lh = MikanGeometry.rotate(CGPoint(x: 36, y: 70), around: ls, degrees: 20 * step)
         let rh = MikanGeometry.rotate(CGPoint(x: 64, y: 70), around: rs, degrees: 20 * step)
         r.setArms(left: (MikanGeometry.mid(ls, lh), lh), right: (MikanGeometry.mid(rs, rh), rh))
+        r[.leftArmOver] = 0
+        r[.rightArmOver] = 0
         return r
+    }
+
+    /// Flips arms, face, and lean left-to-right around the body's center line (x = 50).
+    private mutating func mirror() {
+        let left = (point(.lElbowX, .lElbowY), point(.lHandX, .lHandY))
+        let right = (point(.rElbowX, .rElbowY), point(.rHandX, .rHandY))
+        func flip(_ p: CGPoint) -> CGPoint { CGPoint(x: 100 - p.x, y: p.y) }
+        setArms(left: (flip(right.0), flip(right.1)), right: (flip(left.0), flip(left.1)))
+        let leftOver = self[.leftArmOver]
+        self[.leftArmOver] = self[.rightArmOver]
+        self[.rightArmOver] = leftOver
+        for slot in [Slot.headTilt, .faceDX, .look, .bodyRot] {
+            self[slot] = -self[slot]
+        }
     }
 }
 

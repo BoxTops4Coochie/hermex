@@ -29,6 +29,7 @@ enum MikanPalette {
     static let tongue = Color(hex: 0xF58C98)
     static let tear = Color(hex: 0x8FD0FF)
     static let blush = Color(hex: 0xFF8E9A)
+    static let anger = Color(hex: 0xE5383B)
     static let inkDark = Color(hex: 0x24150E)
     static let inkLight = Color(hex: 0x7A4524)
 }
@@ -181,6 +182,10 @@ private struct MikanPainter {
             }
         }
 
+        if rig[.browAngry] > 0.01 {
+            drawAngerMark(ctx, center: CGPoint(x: hx + 10, y: hy - 7.5))
+        }
+
         if rig[.tear] > 0.01 {
             let x = fx - 10, y = hy + 9
             var drop = Path()
@@ -222,7 +227,9 @@ private struct MikanPainter {
         e.fill(almond, with: .color(.white))
 
         let ix = ex + rig[.look]
-        let lid = rig[.sadLid]
+        let lid = min(1, rig[.sadLid] + rig[.angryLid])
+        // Sad lids droop at the outer corner, angry lids at the inner corner.
+        let slant = side * 1.2 * (rig[.sadLid] - rig[.angryLid])
         var clipped = e
         clipped.clip(to: almond)
         clipped.fill(ellipse(ix, ey, 4.5, 4.5), with: .color(MikanPalette.iris))
@@ -232,8 +239,8 @@ private struct MikanPainter {
         clipped.fill(ellipse(ix, ey + 0.2, 2.3, 3.3), with: .color(MikanPalette.pupil))
         clipped.fill(ellipse(ix - 1.4, ey - 1.8, 1.6, 1.6), with: .color(.white))
         clipped.fill(ellipse(ix + 1.5, ey + 1.8, 0.6, 0.6), with: .color(.white))
-        let lidLeft = MikanGeometry.mix(ey - 6.5, ey - 1.4 - side * 1.2, lid)
-        let lidRight = MikanGeometry.mix(ey - 6.5, ey - 1.4 + side * 1.2, lid)
+        let lidLeft = MikanGeometry.mix(ey - 6.5, ey - 1.4 - slant, lid)
+        let lidRight = MikanGeometry.mix(ey - 6.5, ey - 1.4 + slant, lid)
         if lid > 0.01 {
             clipped.fill(polygon([CGPoint(x: ex - 6, y: ey - 8), CGPoint(x: ex + 6, y: ey - 8),
                                   CGPoint(x: ex + 6, y: lidRight), CGPoint(x: ex - 6, y: lidLeft)]),
@@ -252,6 +259,19 @@ private struct MikanPainter {
         e.stroke(lash, with: .color(ink), style: StrokeStyle(lineWidth: 2, lineCap: .round))
     }
 
+    /// The anime "💢" vein: four curved corner strokes around a point.
+    private func drawAngerMark(_ ctx: GraphicsContext, center c: CGPoint) {
+        var mark = ctx
+        mark.opacity = rig[.browAngry]
+        var path = Path()
+        for (dx, dy) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+            path.move(to: CGPoint(x: c.x + dx * 0.8, y: c.y + dy * 2.8))
+            path.addQuadCurve(to: CGPoint(x: c.x + dx * 2.8, y: c.y + dy * 0.8),
+                              control: CGPoint(x: c.x + dx * 0.8, y: c.y + dy * 0.8))
+        }
+        mark.stroke(path, with: .color(MikanPalette.anger), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
+    }
+
     private func drawBrows(_ ctx: GraphicsContext, ex: CGFloat, by: CGFloat, side: CGFloat) {
         if rig[.browThink] > 0.01 {
             var c = ctx
@@ -262,6 +282,11 @@ private struct MikanPainter {
             } else {
                 line(c, CGPoint(x: ex - 3.5, y: by + 1.8), CGPoint(x: ex + 3.5, y: by + 1.4), width: 1.5)
             }
+        }
+        if rig[.browAngry] > 0.01 {
+            var c = ctx
+            c.opacity = rig[.browAngry]
+            line(c, CGPoint(x: ex + side * 3.6, y: by - 0.4), CGPoint(x: ex - side * 3, y: by + 2.4), width: 1.7)
         }
         if rig[.browSad] > 0.01 {
             var c = ctx

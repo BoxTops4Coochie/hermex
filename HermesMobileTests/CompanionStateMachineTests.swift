@@ -6,8 +6,11 @@ final class CompanionStateMachineTests: XCTestCase {
         for isActiveStream in [false, true] {
             for hasError in [false, true] {
                 for justCompleted in [false, true] {
+                  for isAnnoyed in [false, true] {
                     let expected: CompanionState
-                    if hasError {
+                    if isAnnoyed {
+                        expected = .annoyed
+                    } else if hasError {
                         expected = .sad
                     } else if justCompleted {
                         expected = .happy
@@ -20,14 +23,23 @@ final class CompanionStateMachineTests: XCTestCase {
                         CompanionStateMachine.state(
                             isActiveStream: isActiveStream,
                             hasError: hasError,
-                            justCompletedResponse: justCompleted
+                            justCompletedResponse: justCompleted,
+                            isAnnoyed: isAnnoyed
                         ),
                         expected,
-                        "stream=\(isActiveStream) error=\(hasError) completed=\(justCompleted)"
+                        "stream=\(isActiveStream) error=\(hasError) completed=\(justCompleted) annoyed=\(isAnnoyed)"
                     )
+                  }
                 }
             }
         }
+    }
+
+    func testAnnoyedBeatsEverything() {
+        XCTAssertEqual(
+            CompanionStateMachine.state(isActiveStream: true, hasError: true, justCompletedResponse: true, isAnnoyed: true),
+            .annoyed
+        )
     }
 
     func testErrorBeatsCelebrationAndStreaming() {
@@ -51,7 +63,7 @@ final class CompanionStateMachineTests: XCTestCase {
 }
 
 final class MikanRigTests: XCTestCase {
-    private let states: [CompanionState] = [.idle, .thinking, .happy, .sad]
+    private let states: [CompanionState] = [.idle, .thinking, .happy, .sad, .annoyed]
 
     func testEveryStateHasADistinctPose() {
         for (i, a) in states.enumerated() {
@@ -68,13 +80,33 @@ final class MikanRigTests: XCTestCase {
     }
 
     func testWalkingFacesTheWalkDirection() {
-        XCTAssertGreaterThan(MikanRig.walking(toward: .right, stride: true)[.faceDX], 0)
-        XCTAssertLessThan(MikanRig.walking(toward: .left, stride: true)[.faceDX], 0)
+        let idle = MikanRig.pose(for: .idle)
+        XCTAssertGreaterThan(idle.walking(toward: .right, stride: true)[.faceDX], 0)
+        XCTAssertLessThan(idle.walking(toward: .left, stride: true)[.faceDX], 0)
+    }
+
+    func testWalkingKeepsTheExpression() {
+        let walk = MikanRig.pose(for: .annoyed).walking(toward: .left, stride: true)
+        XCTAssertEqual(walk[.browAngry], 1)
+        XCTAssertEqual(walk[.angryLid], 1)
+        XCTAssertEqual(walk[.leftArmOver], 0)
+        XCTAssertEqual(walk[.rightArmOver], 0)
+    }
+
+    func testHappyPointsTowardTheNewestMessage() {
+        let left = MikanRig.pose(for: .happy, pointing: .left)
+        let right = MikanRig.pose(for: .happy, pointing: .right)
+        XCTAssertLessThan(left[.lHandX], 30, "left paw reaches out to the left")
+        XCTAssertLessThan(left[.faceDX], 0)
+        XCTAssertGreaterThan(right[.rHandX], 70, "mirrored: right paw reaches out to the right")
+        XCTAssertGreaterThan(right[.faceDX], 0)
+        XCTAssertEqual(left[.lHandY], right[.rHandY], accuracy: 1e-9)
     }
 
     func testWalkingStridesAlternateFeet() {
-        let a = MikanRig.walking(toward: .right, stride: true)
-        let b = MikanRig.walking(toward: .right, stride: false)
+        let idle = MikanRig.pose(for: .idle)
+        let a = idle.walking(toward: .right, stride: true)
+        let b = idle.walking(toward: .right, stride: false)
         XCTAssertGreaterThan(a[.leftLift], 0)
         XCTAssertEqual(a[.rightLift], 0)
         XCTAssertGreaterThan(b[.rightLift], 0)

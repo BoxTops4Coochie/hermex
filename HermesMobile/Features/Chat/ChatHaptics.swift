@@ -49,6 +49,11 @@ enum ChatHaptics {
         emit(.warning, isEnabled: isEnabled, performer: performer)
     }
 
+    /// Mikan was poked too many times in a row.
+    static func companionAnnoyed(isEnabled: Bool, performer: Performer? = nil) {
+        emit(.mediumImpact, isEnabled: isEnabled, performer: performer)
+    }
+
     /// Any transcript disclosure: tool cards, tool groups, reasoning, marker cards.
     static func disclosureToggled(isEnabled: Bool, performer: Performer? = nil) {
         emit(.selection, isEnabled: isEnabled, performer: performer)

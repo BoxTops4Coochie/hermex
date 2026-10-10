@@ -15,6 +15,8 @@ struct MikanView: View {
     var state: CompanionState
     /// Non-nil while walking.
     var walking: MikanWalkDirection? = nil
+    /// Which way `.happy` points (toward the newest message).
+    var pointing: MikanWalkDirection = .left
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -33,12 +35,11 @@ struct MikanView: View {
     }
 
     private var rig: MikanRig {
-        var r: MikanRig
+        var r = MikanRig.pose(for: state, pointing: pointing)
         if let walking {
-            r = .walking(toward: walking, stride: stride)
-        } else {
-            r = .pose(for: state)
-            if fidget { r.applyFidget(for: state) }
+            r = r.walking(toward: walking, stride: stride)
+        } else if fidget {
+            r.applyFidget(for: state)
         }
         if blink { r[.eyeOpen] = 0 }
         return r
@@ -66,8 +67,8 @@ struct MikanView: View {
     private func walkLoop() async {
         guard walking != nil, !reduceMotion else { return }
         while !Task.isCancelled {
-            withAnimation(.easeInOut(duration: 0.15)) { stride.toggle() }
-            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            withAnimation(.easeInOut(duration: 0.22)) { stride.toggle() }
+            do { try await Task.sleep(for: .milliseconds(220)) } catch { return }
         }
     }
 }
@@ -76,7 +77,7 @@ struct MikanView: View {
 
 #Preview("All states") {
     HStack(spacing: 16) {
-        ForEach([CompanionState.idle, .thinking, .happy, .sad], id: \.self) { state in
+        ForEach([CompanionState.idle, .thinking, .happy, .sad, .annoyed], id: \.self) { state in
             MikanView(state: state).frame(width: 64, height: 70)
         }
         MikanView(state: .idle, walking: .right).frame(width: 64, height: 70)
@@ -94,17 +95,18 @@ struct MikanView: View {
             Text("Thinking").tag(CompanionState.thinking)
             Text("Happy").tag(CompanionState.happy)
             Text("Sad").tag(CompanionState.sad)
+            Text("Annoyed").tag(CompanionState.annoyed)
         }
         .pickerStyle(.segmented)
         Button("Walk") {
             walking = .right
             Task {
-                try? await Task.sleep(for: .milliseconds(600))
+                try? await Task.sleep(for: .milliseconds(1800))
                 walking = nil
             }
         }
         // Real in-app size
-        MikanView(state: state, walking: walking).frame(width: 32, height: 35)
+        MikanView(state: state, walking: walking).frame(width: 40, height: 44)
     }
     .padding()
 }
