@@ -7,6 +7,7 @@ final class CompanionStateMachineTests: XCTestCase {
             for hasError in [false, true] {
                 for justCompleted in [false, true] {
                   for isAnnoyed in [false, true] {
+                   for isRunningTool in [false, true] {
                     let expected: CompanionState
                     if isAnnoyed {
                         expected = .annoyed
@@ -14,6 +15,8 @@ final class CompanionStateMachineTests: XCTestCase {
                         expected = .sad
                     } else if justCompleted {
                         expected = .happy
+                    } else if isActiveStream && isRunningTool {
+                        expected = .working
                     } else if isActiveStream {
                         expected = .thinking
                     } else {
@@ -24,11 +27,13 @@ final class CompanionStateMachineTests: XCTestCase {
                             isActiveStream: isActiveStream,
                             hasError: hasError,
                             justCompletedResponse: justCompleted,
+                            isRunningTool: isRunningTool,
                             isAnnoyed: isAnnoyed
                         ),
                         expected,
-                        "stream=\(isActiveStream) error=\(hasError) completed=\(justCompleted) annoyed=\(isAnnoyed)"
+                        "stream=\(isActiveStream) error=\(hasError) completed=\(justCompleted) annoyed=\(isAnnoyed) tool=\(isRunningTool)"
                     )
+                   }
                   }
                 }
             }
@@ -40,6 +45,12 @@ final class CompanionStateMachineTests: XCTestCase {
             CompanionStateMachine.state(isActiveStream: true, hasError: true, justCompletedResponse: true, isAnnoyed: true),
             .annoyed
         )
+    }
+
+    func testRunningToolIsWorkingOnlyWhileStreaming() {
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: false, isRunningTool: true), .working)
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: false, hasError: false, justCompletedResponse: false, isRunningTool: true), .idle)
+        XCTAssertEqual(CompanionStateMachine.state(isActiveStream: true, hasError: false, justCompletedResponse: true, isRunningTool: true), .happy)
     }
 
     func testErrorBeatsCelebrationAndStreaming() {
@@ -63,7 +74,7 @@ final class CompanionStateMachineTests: XCTestCase {
 }
 
 final class MikanRigTests: XCTestCase {
-    private let states: [CompanionState] = [.idle, .thinking, .happy, .sad, .annoyed]
+    private let states: [CompanionState] = [.idle, .thinking, .working, .happy, .sad, .annoyed]
 
     func testEveryStateHasADistinctPose() {
         for (i, a) in states.enumerated() {
@@ -91,6 +102,19 @@ final class MikanRigTests: XCTestCase {
         XCTAssertEqual(walk[.angryLid], 1)
         XCTAssertEqual(walk[.leftArmOver], 0)
         XCTAssertEqual(walk[.rightArmOver], 0)
+    }
+
+    func testOnlyWorkingShowsTheLaptop() {
+        for state in states {
+            XCTAssertEqual(MikanRig.pose(for: state)[.laptop], state == .working ? 1 : 0, "\(state)")
+        }
+        XCTAssertGreaterThan(MikanRig.pose(for: .working)[.lookY], 0, "eyes on the screen")
+    }
+
+    func testWalkingPutsTheLaptopAway() {
+        let walk = MikanRig.pose(for: .working).walking(toward: .right, stride: false)
+        XCTAssertEqual(walk[.laptop], 0)
+        XCTAssertEqual(walk[.lookY], 0)
     }
 
     func testHappyPointsTowardTheNewestMessage() {

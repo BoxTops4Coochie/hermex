@@ -30,6 +30,14 @@ enum MikanPalette {
     static let tear = Color(hex: 0x8FD0FF)
     static let blush = Color(hex: 0xFF8E9A)
     static let anger = Color(hex: 0xE5383B)
+    static let box = Color(hex: 0xD9A066)
+    static let boxShade = Color(hex: 0xC08347)
+    static let boxTape = Color(hex: 0xEBC28E)
+    static let laptopDeck = Color(hex: 0x9AA0AB)
+    static let laptopLid = Color(hex: 0x3E4350)
+    static let laptopHighlight = Color(hex: 0x59606F)
+    static let screenLight = Color(hex: 0xCDEBFF)
+    static let leaf = Color(hex: 0x5BAF4A)
     static let inkDark = Color(hex: 0x24150E)
     static let inkLight = Color(hex: 0x7A4524)
 }
@@ -54,6 +62,7 @@ private struct MikanPainter {
         drawArms(ctx, over: false)
         drawHead(ctx)
         drawArms(ctx, over: true)
+        drawDesk(ctx)
     }
 
     // MARK: Parts
@@ -107,6 +116,50 @@ private struct MikanPainter {
         inner.fill(bib, with: .color(MikanPalette.cream))
 
         ctx.stroke(body, with: .color(ink), style: StrokeStyle(lineWidth: 2 * o, lineJoin: .round))
+    }
+
+    /// Cardboard box with a laptop on it (lid back toward the viewer). Drawn last so the
+    /// lid sits in front of the paws; slides up and fades in with `laptop`.
+    private func drawDesk(_ context: GraphicsContext) {
+        let amount = rig[.laptop]
+        guard amount > 0.01 else { return }
+        var ctx = context
+        ctx.opacity = min(1, amount)
+        ctx.translateBy(x: 0, y: (1 - amount) * 12)
+
+        let box = Path(CGRect(x: 31, y: 78, width: 38, height: baseline - 78))
+        ctx.fill(box, with: .color(MikanPalette.box))
+        ctx.fill(Path(CGRect(x: 59, y: 78, width: 10, height: baseline - 78)), with: .color(MikanPalette.boxShade))
+        ctx.fill(Path(CGRect(x: 47, y: 78, width: 6, height: 11)), with: .color(MikanPalette.boxTape))
+        var seam = ctx
+        seam.opacity = min(1, amount) * 0.45
+        line(seam, CGPoint(x: 31, y: 83.5), CGPoint(x: 69, y: 83.5), width: 0.8)
+        ctx.stroke(box, with: .color(ink), style: StrokeStyle(lineWidth: 2 * o, lineJoin: .round))
+
+        let deck = polygon([CGPoint(x: 33, y: 78), CGPoint(x: 67, y: 78), CGPoint(x: 65.5, y: 75.8), CGPoint(x: 34.5, y: 75.8)])
+        ctx.fill(deck, with: .color(MikanPalette.laptopDeck))
+        ctx.stroke(deck, with: .color(ink), style: StrokeStyle(lineWidth: 1.1, lineJoin: .round))
+
+        var screenLight = Path()
+        screenLight.move(to: CGPoint(x: 37, y: 64.6))
+        screenLight.addLine(to: CGPoint(x: 63, y: 64.6))
+        var light = ctx
+        light.opacity = min(1, amount) * 0.9
+        light.stroke(screenLight, with: .color(MikanPalette.screenLight), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+
+        let lid = Path(roundedRect: CGRect(x: 35.5, y: 65.5, width: 29, height: 10.5), cornerRadius: 2)
+        ctx.fill(lid, with: .color(MikanPalette.laptopLid))
+        ctx.stroke(lid, with: .color(ink), lineWidth: 2 * o)
+        ctx.fill(Path(roundedRect: CGRect(x: 37, y: 67, width: 26, height: 1.8), cornerRadius: 0.9),
+                 with: .color(MikanPalette.laptopHighlight))
+
+        // A little mikan (mandarin) sticker.
+        ctx.fill(ellipse(50, 71.4, 2.3, 2.3), with: .color(MikanPalette.fur))
+        var leaf = Path()
+        leaf.move(to: CGPoint(x: 50, y: 69.3))
+        leaf.addQuadCurve(to: CGPoint(x: 52.9, y: 68.7), control: CGPoint(x: 51.5, y: 67.8))
+        leaf.addQuadCurve(to: CGPoint(x: 50, y: 69.3), control: CGPoint(x: 51.6, y: 69.8))
+        ctx.fill(leaf, with: .color(MikanPalette.leaf))
     }
 
     private func drawArms(_ ctx: GraphicsContext, over: Bool) {
@@ -227,18 +280,19 @@ private struct MikanPainter {
         e.fill(almond, with: .color(.white))
 
         let ix = ex + rig[.look]
+        let iy = ey + rig[.lookY]
         let lid = min(1, rig[.sadLid] + rig[.angryLid])
         // Sad lids droop at the outer corner, angry lids at the inner corner.
         let slant = side * 1.2 * (rig[.sadLid] - rig[.angryLid])
         var clipped = e
         clipped.clip(to: almond)
-        clipped.fill(ellipse(ix, ey, 4.5, 4.5), with: .color(MikanPalette.iris))
+        clipped.fill(ellipse(ix, iy, 4.5, 4.5), with: .color(MikanPalette.iris))
         var top = clipped
         top.opacity = 0.55
-        top.fill(ellipse(ix, ey - 2.6, 4.5, 4.5), with: .color(MikanPalette.irisTop))
-        clipped.fill(ellipse(ix, ey + 0.2, 2.3, 3.3), with: .color(MikanPalette.pupil))
-        clipped.fill(ellipse(ix - 1.4, ey - 1.8, 1.6, 1.6), with: .color(.white))
-        clipped.fill(ellipse(ix + 1.5, ey + 1.8, 0.6, 0.6), with: .color(.white))
+        top.fill(ellipse(ix, iy - 2.6, 4.5, 4.5), with: .color(MikanPalette.irisTop))
+        clipped.fill(ellipse(ix, iy + 0.2, 2.3, 3.3), with: .color(MikanPalette.pupil))
+        clipped.fill(ellipse(ix - 1.4, iy - 1.8, 1.6, 1.6), with: .color(.white))
+        clipped.fill(ellipse(ix + 1.5, iy + 1.8, 0.6, 0.6), with: .color(.white))
         let lidLeft = MikanGeometry.mix(ey - 6.5, ey - 1.4 - slant, lid)
         let lidRight = MikanGeometry.mix(ey - 6.5, ey - 1.4 + slant, lid)
         if lid > 0.01 {

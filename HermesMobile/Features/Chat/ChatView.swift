@@ -1323,6 +1323,7 @@ struct ChatView: View {
                     MikanCompanionView(
                         isActiveStream: viewModel.activeStreamID != nil,
                         hasError: companionHasError,
+                        isRunningTool: viewModel.liveToolCalls.contains { !$0.isCompleted },
                         completedResponseID: companionCompletedResponseID
                     )
                 }

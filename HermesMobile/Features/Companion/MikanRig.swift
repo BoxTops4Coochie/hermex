@@ -1,7 +1,6 @@
 import SwiftUI
 
 /// Every animatable pose value in one vector so SwiftUI can interpolate whole poses.
-/// All 32 slots are in use; widen to `SIMD64` before adding another.
 struct MikanRig: VectorArithmetic {
     enum Slot: Int {
         case headTilt, headDY, earDroop, earTwitch, eyeOpen, happyEyes, sadLid, look, faceDX
@@ -9,9 +8,10 @@ struct MikanRig: VectorArithmetic {
         case lElbowX, lElbowY, lHandX, lHandY, rElbowX, rElbowY, rHandX, rHandY
         case tail, tailDroop, bodyRot, leftLift, rightLift, tear, leftArmOver, rightArmOver
         case browAngry, angryLid
+        case laptop, lookY
     }
 
-    private var v = SIMD32<Double>()
+    private var v = SIMD64<Double>()
 
     subscript(_ slot: Slot) -> Double {
         get { v[slot.rawValue] }
@@ -75,6 +75,17 @@ struct MikanRig: VectorArithmetic {
             r[.tear] = 1
             r.setArms(left: (CGPoint(x: 38, y: 64), CGPoint(x: 40, y: 72)),
                       right: (CGPoint(x: 62, y: 64), CGPoint(x: 60, y: 72)))
+        case .working:
+            // Standing at a cardboard box, both paws on the laptop keyboard, eyes on the screen.
+            r[.laptop] = 1
+            r[.lookY] = 1.2
+            r[.mouthHmm] = 1
+            r[.headDY] = 1.5
+            r[.tail] = -6
+            r.setArms(left: (CGPoint(x: 36, y: 60), CGPoint(x: 45, y: 64.5)),
+                      right: (CGPoint(x: 64, y: 60), CGPoint(x: 55, y: 64.5)))
+            r[.leftArmOver] = 1
+            r[.rightArmOver] = 1
         case .annoyed:
             // Ears pinned, arms crossed, side-eye.
             r[.earDroop] = 32
@@ -103,6 +114,8 @@ struct MikanRig: VectorArithmetic {
             self[.tail] += 4
         case .annoyed:
             self[.tail] += 18
+        case .working:
+            self[.tail] += 12
         case .happy:
             break
         }
@@ -127,6 +140,8 @@ struct MikanRig: VectorArithmetic {
         r.setArms(left: (MikanGeometry.mid(ls, lh), lh), right: (MikanGeometry.mid(rs, rh), rh))
         r[.leftArmOver] = 0
         r[.rightArmOver] = 0
+        r[.laptop] = 0
+        r[.lookY] = 0
         return r
     }
 

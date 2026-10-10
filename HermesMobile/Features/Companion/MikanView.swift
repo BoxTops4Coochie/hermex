@@ -23,6 +23,8 @@ struct MikanView: View {
     @State private var blink = false
     @State private var fidget = false
     @State private var stride = false
+    /// The paw lifted mid-keystroke while `.working`.
+    @State private var keystroke: MikanWalkDirection?
 
     var body: some View {
         MikanFigure(rig: rig, ink: colorScheme == .dark ? MikanPalette.inkDark : MikanPalette.inkLight)
@@ -40,6 +42,9 @@ struct MikanView: View {
         } else if fidget {
             r.applyFidget(for: state)
         }
+        if walking == nil, state == .working, let keystroke {
+            r[keystroke == .left ? .lHandY : .rHandY] -= 2.4
+        }
         if blink { r[.eyeOpen] = 0 }
         return r
     }
@@ -47,7 +52,12 @@ struct MikanView: View {
     private func fidgetLoop() async {
         blink = false
         fidget = false
+        keystroke = nil
         guard !reduceMotion, state != .happy else { return }
+        if state == .working {
+            await typingLoop()
+            return
+        }
         while !Task.isCancelled {
             do {
                 try await Task.sleep(for: .seconds(Double.random(in: 2.5...5)))
@@ -56,6 +66,30 @@ struct MikanView: View {
                 withAnimation(.easeOut(duration: 0.1)) { blink = false }
                 if Bool.random() {
                     withAnimation(.spring(duration: 0.45, bounce: 0.45)) { fidget.toggle() }
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    /// Short typing bursts (4–7 alternating keystrokes) separated by pauses, so the
+    /// view only animates in brief spurts while a tool runs.
+    private func typingLoop() async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .seconds(Double.random(in: 1.2...2.6)))
+                for index in 0..<Int.random(in: 4...7) {
+                    withAnimation(.easeOut(duration: 0.07)) {
+                        keystroke = index.isMultiple(of: 2) ? .left : .right
+                    }
+                    try await Task.sleep(for: .milliseconds(110))
+                }
+                withAnimation(.easeOut(duration: 0.12)) { keystroke = nil }
+                if Bool.random() {
+                    withAnimation(.easeIn(duration: 0.07)) { blink = true }
+                    try await Task.sleep(for: .milliseconds(130))
+                    withAnimation(.easeOut(duration: 0.1)) { blink = false }
                 }
             } catch {
                 return
@@ -76,7 +110,7 @@ struct MikanView: View {
 
 #Preview("All states") {
     HStack(spacing: 16) {
-        ForEach([CompanionState.idle, .thinking, .happy, .sad, .annoyed], id: \.self) { state in
+        ForEach([CompanionState.idle, .thinking, .working, .happy, .sad, .annoyed], id: \.self) { state in
             MikanView(state: state).frame(width: 64, height: 70)
         }
         MikanView(state: .idle, walking: .right).frame(width: 64, height: 70)
@@ -92,6 +126,7 @@ struct MikanView: View {
         Picker("State", selection: $state) {
             Text("Idle").tag(CompanionState.idle)
             Text("Thinking").tag(CompanionState.thinking)
+            Text("Working").tag(CompanionState.working)
             Text("Happy").tag(CompanionState.happy)
             Text("Sad").tag(CompanionState.sad)
             Text("Annoyed").tag(CompanionState.annoyed)
@@ -105,7 +140,7 @@ struct MikanView: View {
             }
         }
         // Real in-app size
-        MikanView(state: state, walking: walking).frame(width: 60, height: 66)
+        MikanView(state: state, walking: walking).frame(width: 70, height: 77)
     }
     .padding()
 }

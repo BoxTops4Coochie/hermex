@@ -23,15 +23,24 @@ Tests: `HermesMobileTests/CompanionStateMachineTests.swift` (contains both
 
 ## States
 
-`CompanionStateMachine.state(isActiveStream:hasError:justCompletedResponse:isAnnoyed:)`
-is pure. Priority: **annoyed > error > just completed > streaming > idle**.
+`CompanionStateMachine.state(isActiveStream:hasError:justCompletedResponse:isRunningTool:isAnnoyed:)`
+is pure. Priority: **annoyed > error > just completed > running a tool
+(`.working`) > streaming (`.thinking`) > idle**. `.working` also requires an
+active stream, so the laptop never outlives a cancelled run.
 
 | Input (from `ChatView`) | Source |
 |---|---|
 | `isActiveStream` | `viewModel.activeStreamID != nil` |
 | `hasError` | `sendErrorMessage`, `errorMessage`, or `latestRunOutcome?.ending == .failed` |
 | completed response | `latestRunOutcome` with `ending == .completed`; its `endedAt` is the trigger |
+| `isRunningTool` | `viewModel.liveToolCalls.contains { !$0.isCompleted }` (ChatView already reads `liveToolCalls`, so no new invalidation) |
 | annoyed | local to `MikanCompanionView`: tapping Mikan too often (see Taps) |
+
+`.working` shows Mikan standing at a cardboard box with a laptop on it (lid
+back toward the viewer, a mikan sticker, a line of screen light), both paws on
+the keyboard and eyes on the screen. `MikanCompanionView` turns working on as
+soon as a tool runs and off only after tools have been idle for 1.5s, so bursts
+of short tool calls do not flicker the laptop in and out.
 
 `.happy` is a pointing pose: Mikan leans and points up toward the newest
 message, which sits on the leading side of the transcript (up-left in LTR,
@@ -52,8 +61,10 @@ needs no assets, and picks the outline color from the color scheme.
   then scaled to fit. Keep new geometry in those units.
 - A pose is a `MikanRig`. `MikanFigure.animatableData` is the whole rig, so
   any state change springs every value (ears, arms, tail curve, lids) at once.
-  To add an animatable value, add a `Slot` case and set it in `pose(for:)`. All
-  32 slots of the `SIMD32` are used, so widen it to `SIMD64` first.
+  To add an animatable value, add a `Slot` case and set it in `pose(for:)`. The
+  vector is `SIMD64`, so there is plenty of room.
+- The desk (`laptop` slot) is drawn last so the lid sits in front of the paws.
+  It slides up 12 units and fades in as `laptop` goes from 0 to 1.
 - Discrete features (happy `^ ^` eyes, open mouth, arm layering) switch when the
   interpolated value crosses 0.5.
 - Lids are one shape for both moods: `sadLid` slants down at the outer corner,
@@ -86,6 +97,9 @@ These follow the "no continuous repaint" and Reduce Motion rules in `AGENTS.md`.
   twitch or tail flick) fire every 2.5–5s through a `.task(id: state)` sleep
   loop, then hold still. There are no fidgets in `.happy`.
 - The walk loop runs only while `walking` is non-nil (about 3s, a step every 0.3s).
+- `.working` types in bursts instead of fidgeting: 4–7 alternating keystrokes
+  110ms apart, then a 1.2–2.6s pause. Keystrokes lift a paw 2.4 units on top of
+  the pose; they are not rig slots.
 - The walk pose (`walkingTo`) and the walk position (`walkPosition`) are separate
   state with separate animations. Do not add an implicit
   `.animation(_:value: walking)` inside `MikanView`: implicit animations also
@@ -99,7 +113,7 @@ These follow the "no continuous repaint" and Reduce Motion rules in `AGENTS.md`.
 Mikan is the **first** row of `ChatView.composerAccessoryStack`, so it rides the
 keyboard and sits on top of any pinned notices and run-status bars.
 
-- Mikan renders at `CompanionSettings.width` × `rowHeight` (60×66pt).
+- Mikan renders at `CompanionSettings.width` × `rowHeight` (70×77pt).
 - It deliberately **reserves no transcript space**. It is not counted in
   `composerAccessoryVisibleItemCount` or `composerAccessorySpacerHeight`, so it
   may overlap the bottom of the newest message. Being first in the stack keeps
@@ -128,6 +142,6 @@ picker is the VoiceOver path to moving Mikan, because `MikanView` is
 
 Edit the geometry in `MikanPainter` and the poses in `MikanRig.pose(for:)`, then
 check the `#Preview`s in `MikanView.swift`. The "Interactive" preview includes a
-copy at the real in-app size (60×66pt). Light and dark outline colors are
+copy at the real in-app size (70×77pt). Light and dark outline colors are
 `MikanPalette.inkLight` and `MikanPalette.inkDark`. The five user-facing strings
 are in `Localizable.xcstrings` with all 17 shipped languages (`needs_review`).

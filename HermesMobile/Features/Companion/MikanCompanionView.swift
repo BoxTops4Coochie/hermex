@@ -22,8 +22,8 @@ enum CompanionSettings {
     static let isEnabledKey = "companion.enabled"
     static let sideKey = "companion.side"
     /// Mikan's rendered size; the height is also what the row reserves in the composer accessory stack.
-    static let width: CGFloat = 60
-    static let rowHeight: CGFloat = 66
+    static let width: CGFloat = 70
+    static let rowHeight: CGFloat = 77
 }
 
 /// Mikan's row in the composer accessory stack. Inputs are plain values so the
@@ -31,11 +31,15 @@ enum CompanionSettings {
 ///
 /// Taps: a double-tap walks Mikan to the other side; five taps within 2.5s make
 /// Mikan annoyed until 3s pass without a tap. A completed response shows
-/// `.happy` (pointing at the new message) for 2s.
+/// `.happy` (pointing at the new message) for 2s. While a tool runs Mikan works at
+/// a laptop, and keeps it out for 1.5s after the last tool so bursts of short
+/// tool calls don't flicker.
 @MainActor
 struct MikanCompanionView: View {
     let isActiveStream: Bool
     let hasError: Bool
+    /// True while any live tool call is unfinished.
+    let isRunningTool: Bool
     /// Identifies the latest completed response; each new value triggers a short celebration.
     let completedResponseID: Date?
 
@@ -52,6 +56,7 @@ struct MikanCompanionView: View {
     @State private var recentTaps: [Date] = []
     @State private var annoyance = 0
     @State private var isAnnoyed = false
+    @State private var isWorking = false
 
     private static let walkDuration = 3.0
     private static let celebrationDuration: Duration = .seconds(2)
@@ -59,6 +64,7 @@ struct MikanCompanionView: View {
     private static let annoyingTapCount = 5
     private static let annoyingTapWindow: TimeInterval = 2.5
     private static let calmDownDelay: Duration = .seconds(3)
+    private static let workingLinger: Duration = .milliseconds(1500)
 
     var body: some View {
         MikanView(state: state, walking: walkingTo?.walkDirection, pointing: newestMessageDirection)
@@ -71,6 +77,7 @@ struct MikanCompanionView: View {
             }
             .task(id: celebration) { await celebrate() }
             .task(id: annoyance) { await calmDown() }
+            .task(id: isRunningTool) { await updateWorking() }
     }
 
     private var state: CompanionState {
@@ -78,6 +85,7 @@ struct MikanCompanionView: View {
             isActiveStream: isActiveStream,
             hasError: hasError,
             justCompletedResponse: isCelebrating,
+            isRunningTool: isWorking,
             isAnnoyed: isAnnoyed
         )
     }
@@ -145,6 +153,18 @@ struct MikanCompanionView: View {
         // A newer celebration cancels this one and owns the flag.
         if !Task.isCancelled {
             isCelebrating = false
+        }
+    }
+
+    /// Starts working immediately; stops only after tools have been idle for a moment.
+    private func updateWorking() async {
+        guard !isRunningTool else {
+            isWorking = true
+            return
+        }
+        try? await Task.sleep(for: Self.workingLinger)
+        if !Task.isCancelled {
+            isWorking = false
         }
     }
 
