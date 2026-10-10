@@ -273,6 +273,7 @@ struct ChatView: View {
     @AppStorage(ChatTranscriptDisplaySettings.rtlChatLayoutEnabledKey) private var rtlChatLayoutEnabled = ChatTranscriptDisplaySettings.rtlChatLayoutDefaultEnabled
     @AppStorage(SectionVisibilitySettings.chatFilesKey) private var showsFilesButton = true
     @AppStorage(SectionVisibilitySettings.chatGitKey) private var showsGitControls = true
+    @AppStorage(CompanionSettings.isEnabledKey) private var isCompanionEnabled = true
 
     let session: SessionSummary
     let server: URL
@@ -1313,26 +1314,44 @@ struct ChatView: View {
 
     @ViewBuilder
     private var composerAccessoryStack: some View {
-        if composerAccessoryVisibleItemCount > 0 {
+        if composerAccessoryVisibleItemCount > 0 || isCompanionEnabled {
             VStack(spacing: composerAccessoryVerticalSpacing) {
+                // Mikan rides on top of the stack and reserves no transcript space: it may
+                // overlap the newest message, never the notices below it. Only Mikan takes
+                // touches (double-tap to switch sides); the row's empty width passes through.
+                if isCompanionEnabled {
+                    MikanCompanionView(
+                        streamID: viewModel.activeStreamID,
+                        hasError: viewModel.sendErrorMessage != nil || viewModel.errorMessage != nil,
+                        lastRunFailed: viewModel.latestRunOutcome?.ending == .failed,
+                        isRunningTool: viewModel.liveToolCalls.contains { !$0.isCompleted },
+                        hasAnswerText: viewModel.hasLiveAnswerText,
+                        completedResponseID: companionCompletedResponseID,
+                        // Assistant replies sit on the transcript's leading edge.
+                        newestMessageSide: chatLayoutDirection == .rightToLeft ? .right : .left
+                    )
+                }
+
                 if !composerLocalNotices.isEmpty {
                     PinnedLocalNoticeStack(notices: composerLocalNotices)
+                        .allowsHitTesting(false)
                         .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
                 }
 
                 if let activeRunStatusPresentation {
                     ChatActiveRunStatusView(presentation: activeRunStatusPresentation)
+                        .allowsHitTesting(false)
                         .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
                 }
 
                 if showsApprovalBypassStatus {
                     ApprovalBypassStatusPill()
+                        .allowsHitTesting(false)
                         .transition(ChatMotion.bottomOverlayTransition(reduceMotion: reduceMotion))
                 }
             }
             .padding(.horizontal)
             .padding(.bottom, composerHeight + 8 + clarificationFootprintHeight)
-            .allowsHitTesting(false)
             .zIndex(8)
             .animation(ChatMotion.quickState(reduceMotion: reduceMotion), value: composerAccessoryVisibleItemCount)
             .animation(ChatMotion.quickState(reduceMotion: reduceMotion), value: activeRunStatusPresentation)
@@ -1627,6 +1646,12 @@ struct ChatView: View {
             count += 1
         }
         return count
+    }
+
+    /// End time of the latest run, only when it completed (not cancelled or failed).
+    private var companionCompletedResponseID: Date? {
+        guard let outcome = viewModel.latestRunOutcome, outcome.ending == .completed else { return nil }
+        return outcome.endedAt
     }
 
     private var displayTitle: String {

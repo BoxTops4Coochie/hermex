@@ -351,6 +351,9 @@ final class ChatViewModel {
     // assistant message at completion; a server-provided value (when upstream
     // adds one) would take precedence at decode time via `ttft_seconds`.
     private(set) var liveTurnTTFT: Double?
+    /// True once this turn's answer text (live or replayed after a reattach) has
+    /// started arriving. Reasoning does not count. Drives the companion's laptop pose.
+    private(set) var hasLiveAnswerText = false
     private var turnTTFTStart: Date?
     private(set) var liveReasoningText = ""
     private(set) var streamingAssistantMessageID: String? {
@@ -831,6 +834,7 @@ final class ChatViewModel {
     private func startTurnTTFTClock() {
         turnTTFTStart = Date()
         liveTurnTTFT = nil
+        hasLiveAnswerText = false
     }
 
     /// Arms the stopwatch when adopting an already-active stream (app opened
@@ -1574,6 +1578,7 @@ final class ChatViewModel {
             reasoningAnchorMessageID = nil
             attachmentCoordinator.removeAllLocalPreviews()
             liveTurnTTFT = nil
+            hasLiveAnswerText = false
             turnTTFTStart = nil
             streamCoordinator.reconcileSessionLoad(
                 loadedActiveStreamID: loadedActiveStreamID,
@@ -1636,6 +1641,7 @@ final class ChatViewModel {
                         streamingAssistantMessageID = nil
                         attachmentCoordinator.removeAllLocalPreviews()
                         liveTurnTTFT = nil
+                        hasLiveAnswerText = false
                         turnTTFTStart = nil
                         streamCoordinator.reconcileSessionLoad(
                             loadedActiveStreamID: nil,
@@ -5257,6 +5263,9 @@ final class ChatViewModel {
         if let start = turnTTFTStart, liveTurnTTFT == nil {
             liveTurnTTFT = Date().timeIntervalSince(start)
         }
+        if !hasLiveAnswerText {
+            hasLiveAnswerText = true
+        }
         // Chunks were deduplicated at append time, so flushing is pure concatenation.
         // A word-unit limit moves only the head of the buffer into the visible
         // message; the tail stays pending, keeping the replay-dedup invariant that
@@ -6076,6 +6085,7 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
             turnTtft: resolvedTTFT
         )
         liveTurnTTFT = nil
+        hasLiveAnswerText = false
         turnTTFTStart = nil
         return hasCompletedTranscript
     }

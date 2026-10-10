@@ -24,6 +24,12 @@
 		1A2B3C4D5E6F700000000001 /* HermesMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000011 /* HermesMobileApp.swift */; };
 		C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */; };
 		C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */; };
+		C7A7000000000000000000D1 /* MikanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D2 /* MikanView.swift */; };
+		C7A7000000000000000000DB /* MikanPainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000DC /* MikanPainter.swift */; };
+		C7A7000000000000000000D9 /* MikanRig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000DA /* MikanRig.swift */; };
+		C7A7000000000000000000D7 /* CompanionSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D8 /* CompanionSettingsSection.swift */; };
+		C7A7000000000000000000D5 /* MikanCompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D6 /* MikanCompanionView.swift */; };
+		C7A7000000000000000000D3 /* CompanionStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D4 /* CompanionStateMachine.swift */; };
 		1A2B3C4D5E6F700000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000012 /* ContentView.swift */; };
 		1A2B3C4D5E6F700000000338 /* HermexAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000337 /* HermexAppIntents.swift */; };
 		1A2B3C4D5E6F700000000343 /* ProfileEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000342 /* ProfileEntity.swift */; };
@@ -34,6 +40,7 @@
 		10CA110C0DE000000000B003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA110C0DE000000000B002 /* Localizable.xcstrings */; };
 		10CA110C0DE000000000B004 /* AppShortcuts.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA110C0DE000000000B005 /* AppShortcuts.xcstrings */; };
 		10CA110C0DE000000000C001 /* LocalizationCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CA110C0DE000000000C002 /* LocalizationCatalogTests.swift */; };
+		C7A7000000000000000000E1 /* CompanionStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */; };
 		1A2B3C4D5E6F700000000004 /* LDSwiftEventSource in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000094 /* LDSwiftEventSource */; };
 		1A2B3C4D5E6F700000000005 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000095 /* MarkdownUI */; };
 		1A2B3C4D5E6F700000000006 /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000096 /* Splash */; };
@@ -483,6 +490,12 @@
 		1A2B3C4D5E6F700000000010 /* HermesMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HermesMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D5E6F700000000011 /* HermesMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesMobileApp.swift; sourceTree = "<group>"; };
 		C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/WidgetDiagnosticsSection.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D2 /* MikanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Companion/MikanView.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000DC /* MikanPainter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Companion/MikanPainter.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000DA /* MikanRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Companion/MikanRig.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D8 /* CompanionSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Companion/CompanionSettingsSection.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D6 /* MikanCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Companion/MikanCompanionView.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D4 /* CompanionStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Companion/CompanionStateMachine.swift; sourceTree = "<group>"; };
 		C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Chat/AssistantTurnTimestampFormatter.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000337 /* HermexAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermexAppIntents.swift; sourceTree = "<group>"; };
@@ -494,6 +507,7 @@
 		10CA110C0DE000000000B002 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		10CA110C0DE000000000B005 /* AppShortcuts.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = AppShortcuts.xcstrings; sourceTree = "<group>"; };
 		10CA110C0DE000000000C002 /* LocalizationCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationCatalogTests.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionStateMachineTests.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000015 /* HermesMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HermesMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D5E6F7000000000B0 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7000000000B1 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
@@ -948,6 +962,12 @@
 				1A2B3C4D5E6F700000000011 /* HermesMobileApp.swift */,
 				C7A7000000000000000000B2 /* AssistantTurnTimestampFormatter.swift */,
 				C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */,
+				C7A7000000000000000000D2 /* MikanView.swift */,
+				C7A7000000000000000000DC /* MikanPainter.swift */,
+				C7A7000000000000000000DA /* MikanRig.swift */,
+				C7A7000000000000000000D8 /* CompanionSettingsSection.swift */,
+				C7A7000000000000000000D6 /* MikanCompanionView.swift */,
+				C7A7000000000000000000D4 /* CompanionStateMachine.swift */,
 				1A2B3C4D5E6F700000000012 /* ContentView.swift */,
 				1A2B3C4D5E6F7000000000FA /* Config */,
 				1A2B3C4D5E6F700000000339 /* AppIntents */,
@@ -994,6 +1014,7 @@
 				C28702000000000000000004 /* ChatDraftStoreTests.swift */,
 				C28702000000000000000008 /* ChatDraftAttachmentStoreTests.swift */,
 				10CA110C0DE000000000C002 /* LocalizationCatalogTests.swift */,
+				C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */,
 				1A2B3C4D5E6F7000000000BC /* APIClientTests.swift */,
 				B5A1000000000000000000A1 /* ServerRegistryTests.swift */,
 				C0FF000000000000000000C2 /* CustomHeaderInjectionTests.swift */,
@@ -1789,6 +1810,12 @@
 			files = (
 				1A2B3C4D5E6F700000000001 /* HermesMobileApp.swift in Sources */,
 				C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */,
+				C7A7000000000000000000D1 /* MikanView.swift in Sources */,
+				C7A7000000000000000000DB /* MikanPainter.swift in Sources */,
+				C7A7000000000000000000D9 /* MikanRig.swift in Sources */,
+				C7A7000000000000000000D7 /* CompanionSettingsSection.swift in Sources */,
+				C7A7000000000000000000D5 /* MikanCompanionView.swift in Sources */,
+				C7A7000000000000000000D3 /* CompanionStateMachine.swift in Sources */,
 				C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */,
 				C7A7000000000000000000B1 /* AssistantTurnTimestampFormatter.swift in Sources */,
 				1A2B3C4D5E6F700000000002 /* ContentView.swift in Sources */,
@@ -2055,6 +2082,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				10CA110C0DE000000000C001 /* LocalizationCatalogTests.swift in Sources */,
+				C7A7000000000000000000E1 /* CompanionStateMachineTests.swift in Sources */,
 				1A2B3C4D5E6F7000000000AC /* APIClientTests.swift in Sources */,
 				B5A1000000000000000000A0 /* ServerRegistryTests.swift in Sources */,
 				C0FF000000000000000000C1 /* CustomHeaderInjectionTests.swift in Sources */,
