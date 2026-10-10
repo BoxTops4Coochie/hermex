@@ -22,8 +22,8 @@ enum CompanionSettings {
     static let isEnabledKey = "companion.enabled"
     static let sideKey = "companion.side"
     /// Mikan's rendered size; the height is also what the row reserves in the composer accessory stack.
-    static let width: CGFloat = 40
-    static let rowHeight: CGFloat = 44
+    static let width: CGFloat = 60
+    static let rowHeight: CGFloat = 66
 }
 
 /// Mikan's row in the composer accessory stack. Inputs are plain values so the
@@ -50,7 +50,7 @@ struct MikanCompanionView: View {
     @State private var annoyance = 0
     @State private var isAnnoyed = false
 
-    private static let walkDuration = 1.8
+    private static let walkDuration = 3.0
     private static let celebrationDuration: Duration = .seconds(2)
     private static let doubleTapInterval: TimeInterval = 0.35
     private static let annoyingTapCount = 5

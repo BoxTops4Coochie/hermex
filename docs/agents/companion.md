@@ -68,7 +68,7 @@ needs no assets, and picks the outline color from the color scheme.
 `MikanCompanionView` counts every tap itself (`onTapGesture` without a count),
 so there is no single-tap delay:
 
-- Two taps within 0.35s walk Mikan to the other side over 1.8s. More taps
+- Two taps within 0.35s walk Mikan to the other side over 3s. More taps
   while walking do not start another walk.
 - Five taps within 2.5s make Mikan `.annoyed` (ears pinned, arms crossed,
   angry lids and brows, a red anger mark) with one medium haptic
@@ -85,7 +85,7 @@ These follow the "no continuous repaint" and Reduce Motion rules in `AGENTS.md`.
 - Nothing loops while Mikan is at rest. Idle fidgets (a blink, sometimes an ear
   twitch or tail flick) fire every 2.5–5s through a `.task(id: state)` sleep
   loop, then hold still. There are no fidgets in `.happy`.
-- The walk loop runs only while `walking` is non-nil (about 1.8s, a step every 0.22s).
+- The walk loop runs only while `walking` is non-nil (about 3s, a step every 0.3s).
 - Reduce Motion: pose changes snap, fidgets and the walk cycle are off, and a
   double-tap swaps sides instantly.
 
@@ -94,14 +94,13 @@ These follow the "no continuous repaint" and Reduce Motion rules in `AGENTS.md`.
 Mikan is the last row of `ChatView.composerAccessoryStack`, so it rides the
 keyboard and stacks with pinned notices and run-status bars.
 
-- Mikan renders at `CompanionSettings.width` × `rowHeight` (40×44pt; the tap
-  target meets the 44pt minimum).
+- Mikan renders at `CompanionSettings.width` × `rowHeight` (60×66pt).
 - It counts in `composerAccessoryVisibleItemCount`, and its
   `CompanionSettings.rowHeight` counts in `composerAccessorySpacerHeight`.
   That reserves room in the transcript inset so Mikan never covers the last
   message.
 - The stack used to apply `.allowsHitTesting(false)` to the whole `VStack`. That
-  modifier now sits on each existing item, so only Mikan's 40pt hit area takes
+  modifier now sits on each existing item, so only Mikan's 60pt hit area takes
   touches. The rest of its row passes touches through to the transcript.
 - It must never live inside the transcript `LazyVStack` or any scroll row.
 
@@ -120,6 +119,6 @@ picker is the VoiceOver path to moving Mikan, because `MikanView` is
 
 Edit the geometry in `MikanPainter` and the poses in `MikanRig.pose(for:)`, then
 check the `#Preview`s in `MikanView.swift`. The "Interactive" preview includes a
-copy at the real in-app size (40×44pt). Light and dark outline colors are
+copy at the real in-app size (60×66pt). Light and dark outline colors are
 `MikanPalette.inkLight` and `MikanPalette.inkDark`. The five user-facing strings
 are in `Localizable.xcstrings` with all 17 shipped languages (`needs_review`).

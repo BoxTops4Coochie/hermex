@@ -67,8 +67,8 @@ struct MikanView: View {
     private func walkLoop() async {
         guard walking != nil, !reduceMotion else { return }
         while !Task.isCancelled {
-            withAnimation(.easeInOut(duration: 0.22)) { stride.toggle() }
-            do { try await Task.sleep(for: .milliseconds(220)) } catch { return }
+            withAnimation(.easeInOut(duration: 0.3)) { stride.toggle() }
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
         }
     }
 }
@@ -101,12 +101,12 @@ struct MikanView: View {
         Button("Walk") {
             walking = .right
             Task {
-                try? await Task.sleep(for: .milliseconds(1800))
+                try? await Task.sleep(for: .milliseconds(3000))
                 walking = nil
             }
         }
         // Real in-app size
-        MikanView(state: state, walking: walking).frame(width: 40, height: 44)
+        MikanView(state: state, walking: walking).frame(width: 60, height: 66)
     }
     .padding()
 }
