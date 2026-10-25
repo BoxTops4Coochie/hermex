@@ -583,6 +583,18 @@
 		559000000000000000000006 /* PushPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559000000000000000000016 /* PushPreviewTests.swift */; };
 		C0DE88500000000000000003 /* AppLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE88500000000000000004 /* AppLockTests.swift */; };
 		559000000000000000000007 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA110C0DE000000000B002 /* Localizable.xcstrings */; };
+		C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */; };
+		C7A7000000000000000000D1 /* MikanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D2 /* MikanView.swift */; };
+		C7A7000000000000000000DB /* MikanPainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000DC /* MikanPainter.swift */; };
+		C7A7000000000000000000D9 /* MikanRig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000DA /* MikanRig.swift */; };
+		C7A7000000000000000000D7 /* CompanionSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D8 /* CompanionSettingsSection.swift */; };
+		C7A7000000000000000000D5 /* MikanCompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D6 /* MikanCompanionView.swift */; };
+		C7A7000000000000000000D3 /* CompanionStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000D4 /* CompanionStateMachine.swift */; };
+		C7A7000000000000000000E1 /* CompanionStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */; };
+		A04500000000000000000070 /* RecentChatsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000072 /* RecentChatsSnapshot.swift */; };
+		A04500000000000000000071 /* RecentChatsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000072 /* RecentChatsSnapshot.swift */; };
+		A04500000000000000000073 /* RecentChatsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000074 /* RecentChatsWidget.swift */; };
+		A04500000000000000000076 /* RecentChatsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000077 /* RecentChatsSnapshotTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1206,6 +1218,17 @@
 		559000000000000000000015 /* PushNotificationRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationRouter.swift; sourceTree = "<group>"; };
 		559000000000000000000016 /* PushPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPreviewTests.swift; sourceTree = "<group>"; };
 		C0DE88500000000000000004 /* AppLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockTests.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDiagnosticsSection.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D2 /* MikanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MikanView.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000DC /* MikanPainter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MikanPainter.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000DA /* MikanRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MikanRig.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D8 /* CompanionSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionSettingsSection.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D6 /* MikanCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MikanCompanionView.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000D4 /* CompanionStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionStateMachine.swift; sourceTree = "<group>"; };
+		C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionStateMachineTests.swift; sourceTree = "<group>"; };
+		A04500000000000000000072 /* RecentChatsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChatsSnapshot.swift; sourceTree = "<group>"; };
+		A04500000000000000000074 /* RecentChatsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChatsWidget.swift; sourceTree = "<group>"; };
+		A04500000000000000000077 /* RecentChatsSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChatsSnapshotTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1354,6 +1377,8 @@
 				C0DE89400000000000000006 /* ComposerRecallTests.swift */,
 				C0DE89400000000000000008 /* ComposerDocumentThumbnailsTests.swift */,
 				10CA110C0DE000000000C002 /* LocalizationCatalogTests.swift */,
+				C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */,
+				A04500000000000000000077 /* RecentChatsSnapshotTests.swift */,
 				1A2B3C4D5E6F7000000000BC /* APIClientTests.swift */,
 				B5A1000000000000000000A1 /* ServerRegistryTests.swift */,
 				C0FF000000000000000000C2 /* CustomHeaderInjectionTests.swift */,
@@ -1675,6 +1700,7 @@
 				1A2B3C4D5E6F7000000000C7 /* Workspace */,
 				1A2B3C4D5E6F7000000000F7 /* Settings */,
 				B5A100000000000000000050 /* Share */,
+				C7A7000000000000000000D0 /* Companion */,
 				3F91D2A54B9A4F66A2C01020 /* Tasks */,
 				1A2B3C4D5E6F70000000216 /* Skills */,
 				1A2B3C4D5E6F70000000206 /* Memory */,
@@ -1937,6 +1963,7 @@
 				19C1150000000000000000A2 /* CliSessionsSyncModel.swift */,
 				26AB000000000000000000F2 /* ProvidersView.swift */,
 				26AB000000000000000000F1 /* ProvidersViewModel.swift */,
+				C7A7000000000000000000C2 /* WidgetDiagnosticsSection.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -1966,6 +1993,19 @@
 			path = Share;
 			sourceTree = "<group>";
 		};
+		C7A7000000000000000000D0 /* Companion */ = {
+			isa = PBXGroup;
+			children = (
+				C7A7000000000000000000D4 /* CompanionStateMachine.swift */,
+				C7A7000000000000000000D8 /* CompanionSettingsSection.swift */,
+				C7A7000000000000000000D6 /* MikanCompanionView.swift */,
+				C7A7000000000000000000DC /* MikanPainter.swift */,
+				C7A7000000000000000000DA /* MikanRig.swift */,
+				C7A7000000000000000000D2 /* MikanView.swift */,
+			);
+			path = Companion;
+			sourceTree = "<group>";
+		};
 		B5A100000000000000000051 /* HermesShareExtension */ = {
 			isa = PBXGroup;
 			children = (
@@ -1992,6 +2032,7 @@
 				A04500000000000000000010 /* AgentRunActivityAttributes.swift */,
 				A04500000000000000000011 /* HermesDeepLink.swift */,
 				A04500000000000000000012 /* AgentLiveActivityManager.swift */,
+				A04500000000000000000072 /* RecentChatsSnapshot.swift */,
 			);
 			path = LiveActivities;
 			sourceTree = "<group>";
@@ -2027,6 +2068,7 @@
 			isa = PBXGroup;
 			children = (
 				A04500000000000000000013 /* AgentRunLiveActivityWidget.swift */,
+				A04500000000000000000074 /* RecentChatsWidget.swift */,
 				A04500000000000000000022 /* Resources */,
 			);
 			path = HermesLiveActivityWidget;
@@ -2320,6 +2362,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C7A7000000000000000000C1 /* WidgetDiagnosticsSection.swift in Sources */,
+				C7A7000000000000000000D1 /* MikanView.swift in Sources */,
+				C7A7000000000000000000DB /* MikanPainter.swift in Sources */,
+				C7A7000000000000000000D9 /* MikanRig.swift in Sources */,
+				C7A7000000000000000000D7 /* CompanionSettingsSection.swift in Sources */,
+				C7A7000000000000000000D5 /* MikanCompanionView.swift in Sources */,
+				C7A7000000000000000000D3 /* CompanionStateMachine.swift in Sources */,
+				A04500000000000000000070 /* RecentChatsSnapshot.swift in Sources */,
 				A4790000000000000000E001 /* PushEnvironment.swift in Sources */,
 				A4790000000000000000E002 /* PushPairing.swift in Sources */,
 				559000000000000000000001 /* PushPreview.swift in Sources */,
@@ -2722,6 +2772,8 @@
 				9510188AE84E41D9BAE025F1 /* BotConversationTests.swift in Sources */,
 				9510188AE84E41D9BAE025FA /* BotPendingRequestTests.swift in Sources */,
 				10CA110C0DE000000000C001 /* LocalizationCatalogTests.swift in Sources */,
+				C7A7000000000000000000E1 /* CompanionStateMachineTests.swift in Sources */,
+				A04500000000000000000076 /* RecentChatsSnapshotTests.swift in Sources */,
 				1A2B3C4D5E6F7000000000AC /* APIClientTests.swift in Sources */,
 				B5A1000000000000000000A0 /* ServerRegistryTests.swift in Sources */,
 				C0FF000000000000000000C1 /* CustomHeaderInjectionTests.swift in Sources */,
@@ -2905,6 +2957,8 @@
 				A04500000000000000000004 /* AgentRunActivityAttributes.swift in Sources */,
 				A04500000000000000000005 /* HermesDeepLink.swift in Sources */,
 				A04500000000000000000006 /* AgentRunLiveActivityWidget.swift in Sources */,
+				A04500000000000000000071 /* RecentChatsSnapshot.swift in Sources */,
+				A04500000000000000000073 /* RecentChatsWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
