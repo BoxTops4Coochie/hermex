@@ -99,3 +99,13 @@ _Avoid_: Multi-select, bulk mode
 **Fork**:
 A chat created from another chat's history by Fork From Here or `/branch` (`/api/session/branch`). The server marks it `session_source: fork` with a `parent_session_id`, and Hermex shows a "Forked from" row that opens the parent. Agent child sessions (subagents, cron, CLI `/new`) also carry a parent but are not Forks.
 _Avoid_: Branch (for the chat), child session
+
+## Companion
+
+**Mikan**:
+The orange cat companion above the chat composer. It reacts to the current reply and never runs the agent.
+_Avoid_: mascot, pet
+
+**Companion state**:
+What Mikan is reacting to: idle, thinking, working, happy, sad, or annoyed.
+_Avoid_: mood, expression

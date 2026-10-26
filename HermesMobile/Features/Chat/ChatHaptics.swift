@@ -133,6 +133,11 @@ enum ChatHaptics {
         emit(.selection, isEnabled: isEnabled, performer: performer)
     }
 
+    /// Mikan has been poked into its annoyed pose.
+    static func companionAnnoyed(isEnabled: Bool, performer: Performer? = nil) {
+        emit(.mediumImpact, isEnabled: isEnabled, performer: performer)
+    }
+
     /// Rate limit for the streaming pulse: at most one tick per `interval`, so a
     /// fast token stream feels like a faint ticker instead of a buzz.
     struct StreamingPulseThrottle: Equatable {
