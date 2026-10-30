@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 enum CronJobListMutation: Equatable {
     case upsert(CronJob)
@@ -61,6 +62,7 @@ final class TasksViewModel {
             runningJobs = statusResult.runningJobs ?? [:]
             jobs = jobsResult.jobs ?? []
             deliveryOptions = await deliveryOptionsResponse?.platforms
+            updateScheduledTasksSnapshot()
         } catch {
             lastError = error
             errorMessage = error.localizedDescription
@@ -178,6 +180,7 @@ final class TasksViewModel {
             jobs.removeAll { $0.jobId == jobID }
             runningJobs.removeValue(forKey: jobID)
         }
+        updateScheduledTasksSnapshot()
     }
 
     // MARK: - Row actions
@@ -258,5 +261,56 @@ final class TasksViewModel {
         } else {
             jobs.append(job)
         }
+    }
+
+    /// Fire-and-forget refresh of the Home Screen widget's scheduled-tasks
+    /// snapshot. Entries map the loaded jobs, sorted by next run, and the write
+    /// goes to a utility task so the list never blocks on file IO. The store
+    /// skips the WidgetKit timeline reload when nothing changed.
+    private func updateScheduledTasksSnapshot() {
+        let entries = jobs.compactMap { job -> ScheduledTasksSnapshot.Entry? in
+            let jobID = Self.nonEmpty(job.jobId)
+            let name = Self.nonEmpty(job.name)
+            guard jobID != nil || name != nil else { return nil }
+
+            let status = job.state == "running" ? "running" : job.lastStatus
+            return ScheduledTasksSnapshot.Entry(
+                jobId: jobID,
+                name: name,
+                scheduleDisplay: job.scheduleDisplay,
+                nextRunAt: job.nextRunAt?.date,
+                lastStatus: status,
+                enabled: job.enabled
+            )
+        }
+        .sorted { lhs, rhs in
+            switch (lhs.nextRunAt, rhs.nextRunAt) {
+            case let (left?, right?):
+                return left < right
+            case (nil, _?):
+                return false
+            case (_?, nil):
+                return true
+            case (nil, nil):
+                return false
+            }
+        }
+
+        let serverURLString = server.absoluteString
+        Task.detached(priority: .utility) {
+            let snapshot = ScheduledTasksSnapshot(
+                version: 1,
+                serverURL: serverURLString,
+                generatedAt: Date(),
+                tasks: entries
+            )
+            guard ScheduledTasksSnapshotStore.write(snapshot) else { return }
+            WidgetCenter.shared.reloadTimelines(ofKind: ScheduledTasksSnapshotStore.widgetKind)
+        }
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
     }
 }
