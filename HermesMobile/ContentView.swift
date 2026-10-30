@@ -13,6 +13,9 @@ struct ContentView: View {
     /// in. The session list flips to the Bots inbox, which resolves it against the
     /// live roster (#554).
     @State private var pendingBotDestination: BotDestination?
+    /// A utility screen (currently Tasks) named by a widget deep link, held until
+    /// the owning server is active and signed in.
+    @State private var pendingUtilityDestination: SessionListUtilityDestination?
     @State private var pendingNewChatRequest: NewChatRequest?
     /// Shown when a new chat, session link or share arrives while a Hermes server is
     /// active and no webui server is configured to take it (#899).
@@ -110,6 +113,7 @@ struct ContentView: View {
                 pendingDeepLinkedSessionID: $pendingDeepLinkedSessionID,
                 requestedNewChat: $pendingNewChatRequest,
                 pendingBotDestination: $pendingBotDestination,
+                pendingUtilityDestination: $pendingUtilityDestination,
                 pendingWebuiPush: $pendingWebuiPush
             )
             // Switching the active server keeps us in `.loggedIn`, so without a
@@ -161,6 +165,13 @@ struct ContentView: View {
         // have to switch servers or wait for sign-in before it can open (#554).
         if let destination = HermesDeepLink.botDestination(from: url) {
             routeBot(destination)
+            return
+        }
+
+        // The Scheduled Tasks widget opens the Tasks utility screen on the active
+        // server. A link can only reach the server this app is signed in to.
+        if HermesDeepLink.isTasksURL(url) {
+            if reachWebuiServer() { pendingUtilityDestination = .tasks }
             return
         }
 

@@ -595,6 +595,10 @@
 		A04500000000000000000071 /* RecentChatsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000072 /* RecentChatsSnapshot.swift */; };
 		A04500000000000000000073 /* RecentChatsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000074 /* RecentChatsWidget.swift */; };
 		A04500000000000000000076 /* RecentChatsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000077 /* RecentChatsSnapshotTests.swift */; };
+		A04500000000000000000083 /* ScheduledTasksSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000080 /* ScheduledTasksSnapshot.swift */; };
+		A04500000000000000000084 /* ScheduledTasksSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000080 /* ScheduledTasksSnapshot.swift */; };
+		A04500000000000000000085 /* ScheduledTasksWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000081 /* ScheduledTasksWidget.swift */; };
+		A04500000000000000000086 /* ScheduledTasksSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04500000000000000000082 /* ScheduledTasksSnapshotTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1229,6 +1233,9 @@
 		A04500000000000000000072 /* RecentChatsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChatsSnapshot.swift; sourceTree = "<group>"; };
 		A04500000000000000000074 /* RecentChatsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChatsWidget.swift; sourceTree = "<group>"; };
 		A04500000000000000000077 /* RecentChatsSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChatsSnapshotTests.swift; sourceTree = "<group>"; };
+		A04500000000000000000080 /* ScheduledTasksSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTasksSnapshot.swift; sourceTree = "<group>"; };
+		A04500000000000000000081 /* ScheduledTasksWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTasksWidget.swift; sourceTree = "<group>"; };
+		A04500000000000000000082 /* ScheduledTasksSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTasksSnapshotTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1379,6 +1386,7 @@
 				10CA110C0DE000000000C002 /* LocalizationCatalogTests.swift */,
 				C7A7000000000000000000E2 /* CompanionStateMachineTests.swift */,
 				A04500000000000000000077 /* RecentChatsSnapshotTests.swift */,
+				A04500000000000000000082 /* ScheduledTasksSnapshotTests.swift */,
 				1A2B3C4D5E6F7000000000BC /* APIClientTests.swift */,
 				B5A1000000000000000000A1 /* ServerRegistryTests.swift */,
 				C0FF000000000000000000C2 /* CustomHeaderInjectionTests.swift */,
@@ -2033,6 +2041,7 @@
 				A04500000000000000000011 /* HermesDeepLink.swift */,
 				A04500000000000000000012 /* AgentLiveActivityManager.swift */,
 				A04500000000000000000072 /* RecentChatsSnapshot.swift */,
+				A04500000000000000000080 /* ScheduledTasksSnapshot.swift */,
 			);
 			path = LiveActivities;
 			sourceTree = "<group>";
@@ -2069,6 +2078,7 @@
 			children = (
 				A04500000000000000000013 /* AgentRunLiveActivityWidget.swift */,
 				A04500000000000000000074 /* RecentChatsWidget.swift */,
+				A04500000000000000000081 /* ScheduledTasksWidget.swift */,
 				A04500000000000000000022 /* Resources */,
 			);
 			path = HermesLiveActivityWidget;
@@ -2370,6 +2380,7 @@
 				C7A7000000000000000000D5 /* MikanCompanionView.swift in Sources */,
 				C7A7000000000000000000D3 /* CompanionStateMachine.swift in Sources */,
 				A04500000000000000000070 /* RecentChatsSnapshot.swift in Sources */,
+				A04500000000000000000083 /* ScheduledTasksSnapshot.swift in Sources */,
 				A4790000000000000000E001 /* PushEnvironment.swift in Sources */,
 				A4790000000000000000E002 /* PushPairing.swift in Sources */,
 				559000000000000000000001 /* PushPreview.swift in Sources */,
@@ -2774,6 +2785,7 @@
 				10CA110C0DE000000000C001 /* LocalizationCatalogTests.swift in Sources */,
 				C7A7000000000000000000E1 /* CompanionStateMachineTests.swift in Sources */,
 				A04500000000000000000076 /* RecentChatsSnapshotTests.swift in Sources */,
+				A04500000000000000000086 /* ScheduledTasksSnapshotTests.swift in Sources */,
 				1A2B3C4D5E6F7000000000AC /* APIClientTests.swift in Sources */,
 				B5A1000000000000000000A0 /* ServerRegistryTests.swift in Sources */,
 				C0FF000000000000000000C1 /* CustomHeaderInjectionTests.swift in Sources */,
@@ -2959,6 +2971,8 @@
 				A04500000000000000000006 /* AgentRunLiveActivityWidget.swift in Sources */,
 				A04500000000000000000071 /* RecentChatsSnapshot.swift in Sources */,
 				A04500000000000000000073 /* RecentChatsWidget.swift in Sources */,
+				A04500000000000000000084 /* ScheduledTasksSnapshot.swift in Sources */,
+				A04500000000000000000085 /* ScheduledTasksWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -273,7 +273,7 @@ struct RecentChatsWidgetRowView: View {
     }
 }
 
-private enum RecentChatsWidgetTheme {
+enum RecentChatsWidgetTheme {
     static let background = Color(red: 0.025, green: 0.028, blue: 0.038)
     static let primaryText = Color.white
     static let secondaryText = Color.white.opacity(0.68)

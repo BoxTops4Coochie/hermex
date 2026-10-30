@@ -96,6 +96,9 @@ struct SessionListView: View {
     /// The bot a deep link named. Non-nil flips this screen to the Bots inbox, which
     /// resolves it against its live roster and clears it (#554).
     @Binding private var pendingBotDestination: BotDestination?
+    /// A utility screen named by a deep link (currently the Scheduled Tasks
+    /// widget's Tasks destination). Cleared once it has been selected.
+    @Binding private var pendingUtilityDestination: SessionListUtilityDestination?
     @Binding private var pendingWebuiPush: WebuiPushDestination?
 
     @Environment(\.scenePhase) private var scenePhase
@@ -177,6 +180,7 @@ struct SessionListView: View {
         pendingDeepLinkedSessionID: Binding<String?> = .constant(nil),
         requestedNewChat: Binding<NewChatRequest?> = .constant(nil),
         pendingBotDestination: Binding<BotDestination?> = .constant(nil),
+        pendingUtilityDestination: Binding<SessionListUtilityDestination?> = .constant(nil),
         pendingWebuiPush: Binding<WebuiPushDestination?> = .constant(nil),
         draftStore: ChatDraftStore? = nil
     ) {
@@ -190,6 +194,7 @@ struct SessionListView: View {
         _pendingDeepLinkedSessionID = pendingDeepLinkedSessionID
         _requestedNewChat = requestedNewChat
         _pendingBotDestination = pendingBotDestination
+        _pendingUtilityDestination = pendingUtilityDestination
         _pendingWebuiPush = pendingWebuiPush
         _viewModel = State(initialValue: SessionListViewModel(server: server))
         _navigationState = State(
@@ -529,10 +534,23 @@ struct SessionListView: View {
     private var routedNavigationContainer: some View {
         navigationContainer
             // Cold launch delivers the link before this view appears; a warm one after.
-            .task { showBotsForPendingDestination() }
+            .task {
+                showBotsForPendingDestination()
+                openPendingUtilityDestinationIfNeeded()
+            }
             .onChange(of: pendingBotDestination) { showBotsForPendingDestination() }
+            .onChange(of: pendingUtilityDestination) { openPendingUtilityDestinationIfNeeded() }
             // Every chat below inherits this for its one-time notification offer (#863).
             .openNotificationSettings { showNotificationSettings() }
+    }
+
+    /// A Scheduled Tasks widget tap opens the Tasks utility screen on this
+    /// server. Selecting it takes the user straight there from wherever the
+    /// app was, then clears so a later tap routes afresh.
+    private func openPendingUtilityDestinationIfNeeded() {
+        guard let destination = pendingUtilityDestination else { return }
+        selectDestination(destination)
+        pendingUtilityDestination = nil
     }
 
     /// Opens Settings → Notifications for a chat's one-time offer (#863). On compact

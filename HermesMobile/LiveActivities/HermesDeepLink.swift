@@ -8,6 +8,22 @@ enum HermesDeepLink {
 
     static let sessionHost = "session"
 
+    /// Host for the Scheduled Tasks utility destination: `hermes-agent://tasks`.
+    /// The widget's whole-widget tap opens Tasks on the active server.
+    static let tasksHost = "tasks"
+
+    static func tasksURL() -> URL? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = tasksHost
+        return components.url
+    }
+
+    static func isTasksURL(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == scheme
+            && url.host?.lowercased() == tasksHost
+    }
+
     /// Host for the one bot route (#554): `hermes-agent://bot?server=…&connection=…&profile=…`.
     /// The builder, parser and typed `BotDestination` live in `Features/Bots/BotDeepLink.swift`,
     /// which is main-app only; this file is shared with the Live Activity widget.
