@@ -1,0 +1,164 @@
+import SwiftUI
+
+/// A physical screen side or direction (never leading/trailing; the drawing never
+/// mirrors for RTL). Used for where Mikan sits, which way it walks, and where it points.
+enum CompanionSide: String, CaseIterable, Identifiable, Sendable {
+    case left, right
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .left: String(localized: "Left")
+        case .right: String(localized: "Right")
+        }
+    }
+
+    var opposite: CompanionSide { self == .left ? .right : .left }
+}
+
+/// Mikan, the vector companion cat. Drawn on a `Canvas` in a 100×110 unit space
+/// (feet on y = 106) and scaled to fit. State changes spring between poses; idle
+/// fidgets (blink, ear twitch, tail flick) fire every few seconds and then rest,
+/// so nothing repaints continuously. Reduce Motion snaps between poses and
+/// disables fidgets and the walk cycle.
+@MainActor
+struct MikanView: View {
+    var state: CompanionState
+    /// Non-nil while walking.
+    var walking: CompanionSide? = nil
+    /// Which way `.happy` points (toward the newest message).
+    var pointing: CompanionSide = .left
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var blink = false
+    @State private var fidget = false
+    @State private var stride = false
+    /// The paw lifted mid-keystroke while `.working`.
+    @State private var keystroke: CompanionSide?
+
+    var body: some View {
+        MikanFigure(rig: rig, ink: colorScheme == .dark ? MikanPalette.inkDark : MikanPalette.inkLight)
+            .aspectRatio(100.0 / 110.0, contentMode: .fit)
+            .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.35), value: state)
+            // Keyed on Reduce Motion too, so toggling it mid-chat restarts (and stops) the loops.
+            .task(id: LoopKey(value: state, reduceMotion: reduceMotion)) { await fidgetLoop() }
+            .task(id: LoopKey(value: walking, reduceMotion: reduceMotion)) { await walkLoop() }
+            .accessibilityHidden(true)
+    }
+
+    private var rig: MikanRig {
+        var r = MikanRig.pose(for: state, pointing: pointing)
+        if let walking {
+            r = r.walking(toward: walking, stride: stride)
+        } else if fidget {
+            r.applyFidget(for: state)
+        }
+        if walking == nil, state == .working, let keystroke {
+            r[keystroke == .left ? .lHandY : .rHandY] -= 2.4
+        }
+        if blink { r[.eyeOpen] = 0 }
+        return r
+    }
+
+    private func fidgetLoop() async {
+        blink = false
+        fidget = false
+        keystroke = nil
+        guard !reduceMotion, state != .happy else { return }
+        if state == .working {
+            await typingLoop()
+            return
+        }
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .seconds(Double.random(in: 2.5...5)))
+                withAnimation(.easeIn(duration: 0.07)) { blink = true }
+                try await Task.sleep(for: .milliseconds(130))
+                withAnimation(.easeOut(duration: 0.1)) { blink = false }
+                if Bool.random() {
+                    withAnimation(.spring(duration: 0.45, bounce: 0.45)) { fidget.toggle() }
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    /// Short typing bursts (4–7 alternating keystrokes) separated by pauses, so the
+    /// view only animates in brief spurts while a tool runs.
+    private func typingLoop() async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .seconds(Double.random(in: 1.2...2.6)))
+                for index in 0..<Int.random(in: 4...7) {
+                    withAnimation(.easeOut(duration: 0.07)) {
+                        keystroke = index.isMultiple(of: 2) ? .left : .right
+                    }
+                    try await Task.sleep(for: .milliseconds(110))
+                }
+                withAnimation(.easeOut(duration: 0.12)) { keystroke = nil }
+                if Bool.random() {
+                    withAnimation(.easeIn(duration: 0.07)) { blink = true }
+                    try await Task.sleep(for: .milliseconds(130))
+                    withAnimation(.easeOut(duration: 0.1)) { blink = false }
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func walkLoop() async {
+        guard walking != nil, !reduceMotion else { return }
+        while !Task.isCancelled {
+            withAnimation(.easeInOut(duration: 0.3)) { stride.toggle() }
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+        }
+    }
+}
+
+private struct LoopKey<Value: Equatable>: Equatable {
+    let value: Value
+    let reduceMotion: Bool
+}
+
+// MARK: - Previews
+
+#Preview("All states") {
+    HStack(spacing: 16) {
+        ForEach([CompanionState.idle, .thinking, .working, .happy, .sad, .annoyed], id: \.self) { state in
+            MikanView(state: state).frame(width: 64, height: 70)
+        }
+        MikanView(state: .idle, walking: .right).frame(width: 64, height: 70)
+    }
+    .padding()
+}
+
+#Preview("Interactive") {
+    @Previewable @State var state = CompanionState.idle
+    @Previewable @State var walking: CompanionSide?
+    VStack(spacing: 24) {
+        MikanView(state: state, walking: walking).frame(width: 120, height: 132)
+        Picker("State", selection: $state) {
+            Text("Idle").tag(CompanionState.idle)
+            Text("Thinking").tag(CompanionState.thinking)
+            Text("Working").tag(CompanionState.working)
+            Text("Happy").tag(CompanionState.happy)
+            Text("Sad").tag(CompanionState.sad)
+            Text("Annoyed").tag(CompanionState.annoyed)
+        }
+        .pickerStyle(.segmented)
+        Button("Walk") {
+            walking = .right
+            Task {
+                try? await Task.sleep(for: .milliseconds(3000))
+                walking = nil
+            }
+        }
+        // Real in-app size
+        MikanView(state: state, walking: walking).frame(width: 70, height: 77)
+    }
+    .padding()
+}

@@ -155,3 +155,12 @@ _Avoid_: chat target, session kind
 **Turn identity**:
 Which run a chat is following: a webui stream id, or for a Hermes session its stored key and the host's `turn_started_at`. A Hermes turn ends once `message.complete` and `session.info {running: false}` have both arrived.
 _Avoid_: stream id (for a Hermes turn), run id
+## Companion
+
+**Mikan**:
+The orange cat companion above the chat composer. It reacts to the current reply and never runs the agent.
+_Avoid_: mascot, pet
+
+**Companion state**:
+What Mikan is reacting to: idle, thinking, working, happy, sad, or annoyed.
+_Avoid_: mood, expression

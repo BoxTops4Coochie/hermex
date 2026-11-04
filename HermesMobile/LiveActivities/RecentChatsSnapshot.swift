@@ -1,0 +1,281 @@
+import Foundation
+import SwiftUI
+import WidgetKit
+
+/// Snapshot of the active server's recent session list, handed to the Home
+/// Screen widget through the app group. The widget renders this file as-is
+/// with no network access; the app rewrites it whenever the session list
+/// refreshes (see `SessionListViewModel.updateRecentChatsSnapshot`).
+///
+/// Every field is optional so older or newer writers never crash the reader
+/// (same tolerance contract as `SharedDraftPayload`).
+struct RecentChatsSnapshot: Codable, Equatable {
+    struct Entry: Codable, Equatable, Identifiable {
+        let sessionId: String?
+        let title: String?
+        let updatedAt: Date?
+
+        var id: String {
+            sessionId ?? title ?? ""
+        }
+    }
+
+    let version: Int?
+    /// Absolute URL string of the server the rows came from. The writer always
+    /// sets it so widget rows can carry it on their session deep links and the
+    /// app can drop taps that resolve against a different active server
+    /// (sweep MED #3).
+    let serverURL: String?
+    let generatedAt: Date?
+    let sessions: [Entry]?
+}
+
+/// Reads and writes `RecentChatsSnapshot` in the shared app-group container.
+/// Compiled into both the app (writer) and the widget (reader), so it must not
+/// reference app-only types like `SessionSummary`.
+enum RecentChatsSnapshotStore {
+    static let widgetKind = "RecentChatsWidget"
+    static let maximumSessionCount = 12
+
+    static var appGroupIdentifier: String {
+        let hinted = Bundle.main.object(forInfoDictionaryKey: "HermesAppGroupIdentifier") as? String
+        if let hinted,
+           FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: hinted) != nil {
+            return hinted
+        }
+        // SideStore's signing flow re-creates the APP_GROUPS capability on every
+        // sign, and Apple compounds the implicit group name once per recreation
+        // (group.<bundle-id>.<team>, then .<team> again, ...). The hardcoded hint
+        // therefore lags the profile by one generation after each re-sign. Scan
+        // the embedded provisioning profile for every granted group and return
+        // the first one iOS will actually open a container for.
+        for granted in provisionedAppGroups {
+            if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: granted) != nil {
+                return granted
+            }
+        }
+        return hinted ?? "group.com.uzairansar.hermesmobile"
+    }
+
+    /// App group names granted by the provisioning profile embedded in this
+    /// binary (embedded.mobileprovision), extracted from its plist XML payload.
+    static var provisionedAppGroups: [String] {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let xmlStart = data.range(of: Data("<?xml".utf8)),
+              let xmlEnd = data.range(of: Data("</plist>".utf8))
+        else { return [] }
+        let xml = data.subdata(in: xmlStart.lowerBound..<xmlEnd.upperBound)
+        guard let plist = try? PropertyListSerialization.propertyList(from: xml, options: [], format: nil) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any],
+              let groups = entitlements["com.apple.security.application-groups"] as? [String]
+        else { return [] }
+        return groups
+    }
+
+    /// Caps and stamps a mapped session list. Callers sort their entries by
+    /// recency; the snapshot keeps the first `maximumSessionCount`.
+    static func makeSnapshot(
+        from entries: [RecentChatsSnapshot.Entry],
+        serverURL: String?
+    ) -> RecentChatsSnapshot {
+        RecentChatsSnapshot(
+            version: 1,
+            serverURL: serverURL,
+            generatedAt: Date(),
+            sessions: Array(entries.prefix(maximumSessionCount))
+        )
+    }
+
+    /// Writes the snapshot atomically with full at-rest file protection, so the
+    /// widget data is unreadable before first unlock (matches the share-inbox
+    /// writers; sweep LOW #19). Returns true when the file's content actually
+    /// changed, so callers can skip the WidgetKit timeline reload when a
+    /// refresh carried the same sessions as before.
+    @discardableResult
+    static func write(_ snapshot: RecentChatsSnapshot, to fileURL: URL? = nil) -> Bool {
+        guard let fileURL = fileURL ?? defaultFileURL else { return false }
+
+        if let existing = load(from: fileURL),
+           existing.sessions == snapshot.sessions,
+           existing.serverURL == snapshot.serverURL {
+            return false
+        }
+
+        do {
+            let data = try JSONEncoder().encode(snapshot)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Deletes the snapshot file and reloads the widget, so rows rendered for a
+    /// previous server (or a signed-out state) never linger. Called when the
+    /// active server switches or is signed out; the next session-list load
+    /// writes a fresh snapshot for the new server.
+    static func clear(fileURL: URL? = nil) {
+        guard let fileURL = fileURL ?? defaultFileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
+        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+    }
+
+    /// nil when nothing was written yet (fresh install) or the file is
+    /// unreadable/malformed — the widget then shows its empty state.
+    static func load(from fileURL: URL? = nil) -> RecentChatsSnapshot? {
+        guard let fileURL = fileURL ?? defaultFileURL else { return nil }
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? JSONDecoder().decode(RecentChatsSnapshot.self, from: data)
+    }
+
+    static var defaultFileURL: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
+            .appendingPathComponent("recent-chats-snapshot.json", isDirectory: false)
+    }
+}
+
+/// The widget's content for both supported families. Lives beside the snapshot
+/// model so the app's test target can render it with `ImageRenderer` without
+/// importing the widget extension.
+struct RecentChatsWidgetContentView: View {
+    let snapshot: RecentChatsSnapshot?
+    let displayLimit: Int
+
+    var body: some View {
+        rowsOrEmptyState
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .containerBackground(for: .widget) {
+                RecentChatsWidgetTheme.background.ignoresSafeArea()
+            }
+    }
+
+    private var rowsOrEmptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            header
+
+            let sessions = (snapshot?.sessions ?? []).prefix(displayLimit)
+            if sessions.isEmpty {
+                emptyState
+            } else {
+                ForEach(Array(sessions)) { entry in
+                    RecentChatsWidgetRowView(entry: entry, serverURL: snapshot?.serverURL)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(RecentChatsWidgetTheme.secondaryText)
+
+            Text(String(localized: "Recent Chats"))
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(RecentChatsWidgetTheme.secondaryText)
+                .textCase(.uppercase)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if let serverHost = serverHostLabel {
+                Text(serverHost)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(RecentChatsWidgetTheme.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.bottom, 2)
+    }
+
+    /// Shown for every snapshot: the writer always records the server the rows
+    /// came from, so rows always say where they came from.
+    private var serverHostLabel: String? {
+        guard let serverURL = snapshot?.serverURL else { return nil }
+        return URL(string: serverURL)?.host
+    }
+
+    private var emptyState: some View {
+        Text(String(localized: "Open Hermex to load chats"))
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(RecentChatsWidgetTheme.secondaryText)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+}
+
+struct RecentChatsWidgetRowView: View {
+    let entry: RecentChatsSnapshot.Entry
+    /// The server the snapshot's rows came from; rides on the deep link so the
+    /// app can drop taps that resolve against a different active server
+    /// (sweep MED #3).
+    var serverURL: String?
+
+    var body: some View {
+        // WidgetKit's multi-destination tap target: each row carries its own
+        // session deep link (`Link`, not `widgetURL`, which is one-per-widget).
+        // A row that somehow decodes without a usable session id still renders,
+        // just without a tap destination.
+        if let linkURL = sessionLinkURL {
+            Link(destination: linkURL) {
+                rowContent
+            }
+            .buttonStyle(.plain)
+        } else {
+            rowContent
+        }
+    }
+
+    private var sessionLinkURL: URL? {
+        let sessionID = entry.sessionId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !sessionID.isEmpty else { return nil }
+        if let serverURL, let server = URL(string: serverURL) {
+            return HermesDeepLink.webuiSessionURL(server: server, sessionID: sessionID)
+        }
+        return HermesDeepLink.sessionURL(sessionID: sessionID)
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(displayTitle)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(RecentChatsWidgetTheme.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 8)
+
+            if let updatedAt = entry.updatedAt {
+                Text(updatedAt, style: .relative)
+                    .font(.caption2.weight(.regular))
+                    .foregroundStyle(RecentChatsWidgetTheme.secondaryText)
+                    .lineLimit(1)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RecentChatsWidgetTheme.rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var displayTitle: String {
+        let title = entry.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let title, !title.isEmpty else {
+            return String(localized: "Untitled Session")
+        }
+        return title
+    }
+}
+
+private enum RecentChatsWidgetTheme {
+    static let background = Color(red: 0.025, green: 0.028, blue: 0.038)
+    static let primaryText = Color.white
+    static let secondaryText = Color.white.opacity(0.68)
+    static let rowBackground = Color.white.opacity(0.08)
+}
