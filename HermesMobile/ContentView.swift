@@ -5,7 +5,8 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(ResponseCompletionNotifications.isEnabledKey) private var isResponseCompletionNotificationsEnabled = false
     @State private var shares = SharedImportQueue()
-    @State private var pendingLinks = PendingLinks()    @State private var didCheckInitialPendingShare = false
+    @State private var pendingLinks = PendingLinks()
+    @State private var didCheckInitialPendingShare = false
     @State private var intentRouter = AppIntentRouter.shared
     @AppStorage(BotModeGate.isEnabledKey) private var isBotModeEnabled = false
 
