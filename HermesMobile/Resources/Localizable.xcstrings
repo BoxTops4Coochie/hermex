@@ -171493,6 +171493,112 @@
         }
       }
     },
+    "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Push diagnostics (temporary)\nBundle id at runtime: %@\nProfile aps-environment: %@\nProfile entitlements: %@"
+          }
+        }
+      }
+    },
     "Requested group: %@\nProfile: %@\nProfile appID: %@\nProfile groups: %@\nProfile expires: %@\nContainer reachable: %@\nSnapshot: %@" : {
       "localizations" : {
         "ar" : {

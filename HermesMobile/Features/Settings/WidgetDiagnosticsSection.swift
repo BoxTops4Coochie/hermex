@@ -13,6 +13,9 @@ struct WidgetDiagnosticsSection: View {
         var profileAppID: String = "…"
         var profileGroups: String = "…"
         var profileExpires: String = "…"
+        var runtimeBundleID: String = "…"
+        var profileAPSEnvironment: String = "…"
+        var profileEntitlementKeys: String = "…"
     }
 
     @State private var info = DiagInfo()
@@ -22,6 +25,11 @@ struct WidgetDiagnosticsSection: View {
             Text("Widget Diagnostics")
                 .font(.headline)
             Text("Requested group: \(info.requestedGroup)\nProfile: \(info.profileName)\nProfile appID: \(info.profileAppID)\nProfile groups: \(info.profileGroups)\nProfile expires: \(info.profileExpires)\nContainer reachable: \(info.container ? "YES" : "NO")\nSnapshot: \(info.snapshot)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
+            Text("Push diagnostics (temporary)\nBundle id at runtime: \(info.runtimeBundleID)\nProfile aps-environment: \(info.profileAPSEnvironment)\nProfile entitlements: \(info.profileEntitlementKeys)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,6 +43,7 @@ struct WidgetDiagnosticsSection: View {
     private func measure() {
         var d = DiagInfo()
         d.requestedGroup = RecentChatsSnapshotStore.appGroupIdentifier
+        d.runtimeBundleID = Bundle.main.bundleIdentifier ?? "?"
 
         let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: d.requestedGroup)
@@ -68,6 +77,8 @@ struct WidgetDiagnosticsSection: View {
                     } else {
                         d.profileGroups = "NONE GRANTED"
                     }
+                    d.profileAPSEnvironment = ents["aps-environment"] as? String ?? "NONE GRANTED"
+                    d.profileEntitlementKeys = ents.keys.sorted().joined(separator: ", ")
                 }
                 if let exp = plist["ExpirationDate"] as? Date {
                     let f = DateFormatter()
