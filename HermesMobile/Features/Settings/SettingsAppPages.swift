@@ -233,3 +233,29 @@ private struct AppLockSection: View {
         }
     }
 }
+
+/// Mikan, the chat companion: on or off, and which side he sits on.
+struct SettingsCompanionPage: View {
+    var body: some View {
+        List {
+            Section {
+                CompanionSettingsSection()
+            }
+        }
+        .settingsPage(String(localized: "Companion"))
+    }
+}
+
+/// Widget plumbing diagnostics: the resolved app group, the shared container,
+/// and the installed profile's grants. Kept because sideloaded installs can
+/// disagree with the build about the app group.
+struct SettingsWidgetDiagnosticsPage: View {
+    var body: some View {
+        List {
+            Section {
+                WidgetDiagnosticsSection()
+            }
+        }
+        .settingsPage(String(localized: "Widget Diagnostics"))
+    }
+}

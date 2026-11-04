@@ -273,6 +273,9 @@ final class ChatViewModel {
     /// How the latest run ended, keyed to the turn it answered. Drives the
     /// settled-turn fold label and which turns start expanded.
     private(set) var latestRunOutcome: TranscriptTurnRunOutcome?
+    /// True once this turn's answer text (live or replayed after a reattach) has
+    /// started arriving. Reasoning does not count. Drives the companion's laptop pose.
+    private(set) var hasLiveAnswerText = false
     var activeStreamRecoveryState: ActiveStreamRecoveryState { turn.recoveryState }
     var liveTokensPerSecond: Double? { turn.liveTokensPerSecond }
     private(set) var errorMessage: String?
@@ -1956,6 +1959,7 @@ final class ChatViewModel {
             completedReasoningGroups = []
             liveToolCalls = []
             liveReasoningText = ""
+            hasLiveAnswerText = false
             pinnedLocalNotices = []
             toolCallAnchorMessageID = nil
             reasoningAnchorMessageID = nil
@@ -1997,6 +2001,7 @@ final class ChatViewModel {
                         completedReasoningGroups = []
                         liveToolCalls = []
                         liveReasoningText = ""
+                        hasLiveAnswerText = false
                         pinnedLocalNotices = []
                         toolCallAnchorMessageID = nil
                         reasoningAnchorMessageID = nil
@@ -7045,6 +7050,9 @@ final class ChatViewModel {
             heldStreamingFragmentLastTick = false
         }
 
+        if !hasLiveAnswerText {
+            hasLiveAnswerText = true
+        }
         let messageID = ensureStreamingAssistantMessage()
         if !liveReasoningText.isEmpty && reasoningAnchorMessageID == nil {
             reasoningAnchorMessageID = messageID
@@ -7799,6 +7807,7 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
                 ending: ending.ending
             )
         }
+        hasLiveAnswerText = false
     }
 
     func streamCoordinatorDidReceiveErrorMessage(_ message: String) {
@@ -7885,6 +7894,7 @@ extension ChatViewModel: ChatStreamCoordinatorDelegate {
     @discardableResult
     func streamCoordinatorApplyDone(_ payload: DoneStreamEvent) -> Bool {
         flushPendingStreamingContent()
+        hasLiveAnswerText = false
         let currentStreamingAssistantID = streamingAssistantMessageID
         let hasCompletedTranscript = payload.session?.messages?.isEmpty == false
         if let completedSession = payload.session {

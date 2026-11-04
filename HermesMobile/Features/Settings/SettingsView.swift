@@ -75,6 +75,12 @@ struct SettingsView: View {
                 }
 
                 NavigationLink {
+                    SettingsCompanionPage()
+                } label: {
+                    SettingsLabel(title: String(localized: "Companion"), systemImage: "face.smiling")
+                }
+
+                NavigationLink {
                     SettingsNotificationsPage(server: server)
                 } label: {
                     LabeledContent {
@@ -104,6 +110,12 @@ struct SettingsView: View {
                     } label: {
                         SettingsLabel(title: String(localized: "About Hermex"), systemImage: "info.circle")
                     }
+                }
+
+                NavigationLink {
+                    SettingsWidgetDiagnosticsPage()
+                } label: {
+                    SettingsLabel(title: String(localized: "Widget Diagnostics"), systemImage: "square.grid.2x2")
                 }
 
                 if SettingsDeveloperPage.isAvailable {

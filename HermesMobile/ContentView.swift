@@ -112,8 +112,8 @@ struct ContentView: View {
                 pendingDeepLinkedSessionID: $pendingLinks.deepLinkedSessionID,
                 requestedNewChat: $pendingLinks.newChatRequest,
                 pendingBotDestination: $pendingLinks.bot,
-                pendingWebuiPush: $pendingLinks.webuiPush
-            )
+                pendingUtilityDestination: $pendingLinks.utility,
+                pendingWebuiPush: $pendingLinks.webuiPush            )
             // Switching the active server keeps us in `.loggedIn`, so without a
             // per-server identity SwiftUI would reuse the same SessionListView (and
             // its server-bound view model), leaving stale sessions/chat on screen.
@@ -180,15 +180,12 @@ struct ContentView: View {
             return
         }
 
-        // A session link that names its server opens there, Hermes or webui, or nowhere when that
-        // server isn't usable (#1176); one that doesn't keeps the webui route it always had.
-        if let destination = HermesSessionDestination(url: url) {
-            switchServer(pendingLinks.open(destination, state: authManager.state, servers: authManager.servers))
+        // The Scheduled Tasks widget opens the Tasks utility screen. The link names
+        // no server, so it opens on whichever server is active once the tree is up.
+        if HermesDeepLink.isTasksURL(url) {
+            pendingLinks.utility = .tasks
             return
         }
-
-        // A bare session link names no server: once a webui server moved, it opens only where it
-        // can't be another server's (#1217).
         if let sessionID = HermesDeepLink.sessionID(from: url) {
             switch MovedWebuiRoute.bareSession(sessionID, active: authManager.state.server, servers: authManager.servers) {
             case .webui(let route):
@@ -834,6 +831,9 @@ struct PendingLinks {
     /// The new Hermes session a Shortcut asked for (#1180). The Hermes home turns to Sessions,
     /// whose list opens it.
     var hermesNewChat: HermesNewChatDestination?
+    /// A utility screen a widget named (currently Tasks). The session list opens it once
+    /// the tree is up for the active server.
+    var utility: SessionListUtilityDestination?
 
     /// A webui conversation link replaces whatever other link was waiting.
     @MainActor mutating func open(_ destination: WebuiPushDestination, state: AuthManager.State,
